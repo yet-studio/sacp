@@ -40,11 +40,11 @@
   -[x] Safety property validation
 
 ## Phase 4: Integration & Ecosystem (Q4 2024)
-- [ ] IDE Integration
+- [x] IDE Integration
   - [x] VSCode extension
   - [x] JetBrains plugin
   - [x] Language server protocol support
-  - [ ] Command-line tools
+  - [x] Command-line tools
 
 - [ ] Ecosystem Development
   - [ ] Plugin architecture
