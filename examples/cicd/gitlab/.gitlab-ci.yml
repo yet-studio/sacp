@@ -1,0 +1,100 @@
+variables:
+  PYTHON_VERSION: "3.9"
+  SAFETY_LEVEL: "high"
+  REDIS_URL: "redis://redis:6379"
+
+stages:
+  - validate
+  - analyze
+  - report
+
+services:
+  - redis:latest
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+.setup-python: &setup-python
+  before_script:
+    - python -V
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - pip install -r requirements.txt
+
+static-analysis:
+  stage: validate
+  image: python:${PYTHON_VERSION}
+  <<: *setup-python
+  script:
+    - sacp analyze --level ${SAFETY_LEVEL} --output report.json
+  artifacts:
+    paths:
+      - report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+safety-validation:
+  stage: validate
+  image: python:${PYTHON_VERSION}
+  <<: *setup-python
+  script:
+    - sacp validate --distributed --redis-url ${REDIS_URL} --workers 4
+  dependencies:
+    - static-analysis
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+performance-analysis:
+  stage: analyze
+  image: python:${PYTHON_VERSION}
+  <<: *setup-python
+  script:
+    - sacp analyze --mode performance --output perf-report.json
+  artifacts:
+    paths:
+      - perf-report.json
+    expire_in: 1 week
+  dependencies:
+    - safety-validation
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+codebase-indexing:
+  stage: analyze
+  image: python:${PYTHON_VERSION}
+  <<: *setup-python
+  script:
+    - sacp index --exclude "node_modules,.git" --output index.db
+  artifacts:
+    paths:
+      - index.db
+    expire_in: 1 week
+  dependencies:
+    - safety-validation
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+generate-report:
+  stage: report
+  image: python:${PYTHON_VERSION}
+  <<: *setup-python
+  script:
+    - sacp report --input "report.json,perf-report.json" --output final-report
+  artifacts:
+    paths:
+      - final-report/
+    expire_in: 1 month
+  dependencies:
+    - static-analysis
+    - performance-analysis
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
