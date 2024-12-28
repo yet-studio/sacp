@@ -1,0 +1,75 @@
+site_name: SafeAI CodeGuard Protocol
+site_url: https://docs.sacp.dev
+repo_url: https://github.com/yet-studio/sacp
+repo_name: yet-studio/sacp
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - search.highlight
+  palette:
+    primary: indigo
+    accent: blue
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - Core Concepts:
+    - Safety Properties: concepts/safety-properties.md
+    - Compliance Rules: concepts/compliance-rules.md
+    - Behavior Analysis: concepts/behavior-analysis.md
+  - IDE Integration:
+    - VSCode Extension: ide/vscode.md
+    - JetBrains Plugin: ide/jetbrains.md
+    - Language Server: ide/language-server.md
+  - Command Line:
+    - CLI Overview: cli/overview.md
+    - Commands: cli/commands.md
+    - Configuration: cli/configuration.md
+  - Ecosystem:
+    - Plugin System: ecosystem/plugins.md
+    - Package Management: ecosystem/packages.md
+    - Registry: ecosystem/registry.md
+  - Examples:
+    - Safety Checker: examples/safety-checker.md
+    - Behavior Monitor: examples/behavior-monitor.md
+    - Custom Rules: examples/custom-rules.md
+  - API Reference:
+    - Core API: api/core.md
+    - Plugin API: api/plugin.md
+    - Client API: api/client.md
+  - Contributing:
+    - Guidelines: contributing/guidelines.md
+    - Development: contributing/development.md
+    - Documentation: contributing/documentation.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          setup_commands:
+            - import sys
+            - sys.path.append("src")
+          selection:
+            members: true
+          rendering:
+            show_source: true
+            show_if_no_docstring: true

@@ -1,0 +1,28 @@
+name: sacp-safety-checker
+version: 1.0.0
+description: Example safety checking plugin for SACP
+author: SACP Team
+entry_point: plugin.SafetyCheckerPlugin
+dependencies:
+  - sacp-core>=1.0.0
+capabilities:
+  - safety
+  - compliance
+  - behavior
+config_schema:
+  severity_threshold:
+    type: string
+    enum: [LOW, MEDIUM, HIGH, CRITICAL]
+    default: LOW
+  resource_limits:
+    type: object
+    properties:
+      memory_mb:
+        type: integer
+        default: 1024
+      cpu_percent:
+        type: integer
+        default: 50
+      file_size_mb:
+        type: integer
+        default: 100

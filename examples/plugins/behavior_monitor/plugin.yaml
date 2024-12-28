@@ -1,0 +1,28 @@
+name: sacp-behavior-monitor
+version: 1.0.0
+description: Example behavior monitoring plugin for SACP
+author: SACP Team
+entry_point: plugin.BehaviorMonitorPlugin
+dependencies:
+  - sacp-core>=1.0.0
+  - psutil>=5.9.0
+capabilities:
+  - safety
+  - behavior
+  - monitoring
+config_schema:
+  memory_limit_percent:
+    type: number
+    minimum: 0
+    maximum: 100
+    default: 80
+  cpu_limit_percent:
+    type: number
+    minimum: 0
+    maximum: 100
+    default: 90
+  max_execution_time:
+    type: number
+    minimum: 0
+    default: 300
+    description: Maximum execution time in seconds
