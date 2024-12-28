@@ -46,6 +46,11 @@ nav:
     - Core API: api/core.md
     - Plugin API: api/plugin.md
     - Client API: api/client.md
+  - Scale & Performance:
+    - Distributed Validation: scale/distributed-validation.md
+    - Performance: scale/performance.md
+    - Large Codebase: scale/large-codebase.md
+    - CI/CD: scale/cicd.md
   - Contributing:
     - Guidelines: contributing/guidelines.md
     - Development: contributing/development.md
