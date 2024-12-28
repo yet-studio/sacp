@@ -41,9 +41,9 @@
 
 ## Phase 4: Integration & Ecosystem (Q4 2024)
 - [ ] IDE Integration
-  - [ ] VSCode extension
-  - [ ] JetBrains plugin
-  - [ ] Language server protocol support
+  - [x] VSCode extension
+  - [x] JetBrains plugin
+  - [x] Language server protocol support
   - [ ] Command-line tools
 
 - [ ] Ecosystem Development

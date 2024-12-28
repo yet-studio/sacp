@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<idea-plugin>
+    <id>com.sacp.jetbrains</id>
+    <name>SafeAI CodeGuard Protocol</name>
+    <vendor email="support@sacp.dev" url="https://sacp.dev">SACP</vendor>
+    <description><![CDATA[
+        SafeAI CodeGuard Protocol (SACP) plugin for JetBrains IDEs.<br>
+        <ul>
+            <li>Real-time safety analysis</li>
+            <li>Code verification</li>
+            <li>Compliance checking</li>
+            <li>Behavior analysis</li>
+        </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.python</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Language Server -->
+        <platform.lsp.serverSupportProvider 
+            implementation="com.sacp.jetbrains.SACPServerSupportProvider"/>
+
+        <!-- Tool Windows -->
+        <toolWindow id="SACP" 
+            secondary="true" 
+            icon="AllIcons.General.Modified" 
+            anchor="right" 
+            factoryClass="com.sacp.jetbrains.ui.SACPToolWindowFactory"/>
+
+        <!-- Services -->
+        <applicationService 
+            serviceInterface="com.sacp.jetbrains.services.SACPService"
+            serviceImplementation="com.sacp.jetbrains.services.SACPServiceImpl"/>
+
+        <!-- Inspections -->
+        <localInspection 
+            language="Python" 
+            displayName="SACP Safety Inspection" 
+            groupPath="Python"
+            groupName="SACP" 
+            enabledByDefault="true" 
+            level="WARNING"
+            implementationClass="com.sacp.jetbrains.inspections.SACPInspection"/>
+    </extensions>
+
+    <actions>
+        <!-- Verification Actions -->
+        <group id="SACP.VerificationActions" 
+            text="SACP Verification" 
+            description="SACP verification actions"
+            popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="SACP.Verify" 
+                class="com.sacp.jetbrains.actions.VerifyAction" 
+                text="Verify File" 
+                description="Run SACP verification"/>
+            <action id="SACP.CheckCompliance" 
+                class="com.sacp.jetbrains.actions.ComplianceAction" 
+                text="Check Compliance" 
+                description="Check SACP compliance"/>
+            <action id="SACP.AnalyzeBehavior" 
+                class="com.sacp.jetbrains.actions.BehaviorAction" 
+                text="Analyze Behavior" 
+                description="Analyze AI behavior"/>
+        </group>
+    </actions>
+</idea-plugin>
