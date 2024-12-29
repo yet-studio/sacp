@@ -11,7 +11,8 @@ from .exceptions import (
     OperationError,
     ValidationError,
     SystemStateError,
-    RecoveryError
+    RecoveryError,
+    ResourceLimitError
 )
 from .handler import ErrorHandler
 from .recovery import RecoveryManager
@@ -25,6 +26,7 @@ __all__ = [
     'ValidationError',
     'SystemStateError',
     'RecoveryError',
+    'ResourceLimitError',
     'ErrorHandler',
     'RecoveryManager'
 ]

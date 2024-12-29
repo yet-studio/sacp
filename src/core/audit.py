@@ -11,7 +11,7 @@ import json
 import hashlib
 from pathlib import Path
 import threading
-from queue import Queue
+from queue import Queue, Empty
 import logging
 
 from .protocol import SafetyLevel, AccessScope
@@ -79,20 +79,43 @@ class AuditStore:
         self.base_path.mkdir(parents=True, exist_ok=True)
         self._rotate_file_if_needed()
 
-    def _rotate_file_if_needed(self):
-        """Create a new log file if needed"""
+    def _rotate_file_if_needed(self, force: bool = False) -> bool:
+        """Create a new log file if needed or forced
+        Returns True if rotation occurred
+        """
         if (
-            not self.current_file
+            force
+            or not self.current_file
             or (self.current_file.exists() and self.current_file.stat().st_size >= self.file_size_limit)
         ):
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")  # Include microseconds
             self.current_file = self.base_path / f"audit_{timestamp}.jsonl"
+            return True
+        return False
 
     def store_event(self, event: AuditEvent):
         """Store a single audit event"""
-        self._rotate_file_if_needed()
+        # Convert event to dict first to get accurate size
+        event_dict = self._event_to_dict(event)
+        event_size = len(json.dumps(event_dict))
         
-        event_dict = {
+        # Force rotation if event is too large or current file is near limit
+        if (
+            not self.current_file
+            or event_size > self.file_size_limit / 2  # If event is more than half the limit
+            or (self.current_file.exists() and 
+                self.current_file.stat().st_size + event_size > self.file_size_limit)
+        ):
+            self._rotate_file_if_needed(force=True)
+        
+        with open(self.current_file, 'a') as f:
+            json.dump(event_dict, f)
+            f.write('\n')
+            f.flush()  # Ensure immediate write
+
+    def _event_to_dict(self, event: AuditEvent) -> Dict:
+        """Convert AuditEvent to dictionary for storage"""
+        return {
             'event_id': event.event_id,
             'timestamp': event.timestamp.isoformat(),
             'event_type': event.event_type.name,
@@ -107,67 +130,62 @@ class AuditStore:
             'metadata': event.metadata,
             'parent_event_id': event.parent_event_id
         }
-        
-        with open(self.current_file, 'a') as f:
-            f.write(json.dumps(event_dict) + '\n')
 
     def query_events(
         self,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         event_types: Optional[List[AuditEventType]] = None,
-        severities: Optional[List[AuditSeverity]] = None,
         user_id: Optional[str] = None,
-        token_id: Optional[str] = None,
-        resource_pattern: Optional[str] = None
+        severity: Optional[AuditSeverity] = None
     ) -> List[AuditEvent]:
         """Query audit events with filters"""
         events = []
         
-        for log_file in sorted(self.base_path.glob("audit_*.jsonl")):
-            with open(log_file, 'r') as f:
-                for line in f:
-                    event_dict = json.loads(line)
-                    
-                    # Apply filters
-                    if start_time and datetime.fromisoformat(event_dict['timestamp']) < start_time:
-                        continue
-                    if end_time and datetime.fromisoformat(event_dict['timestamp']) > end_time:
-                        continue
-                    if event_types and event_dict['event_type'] not in [et.name for et in event_types]:
-                        continue
-                    if severities and event_dict['severity'] not in [s.name for s in severities]:
-                        continue
-                    if user_id and event_dict['user_id'] != user_id:
-                        continue
-                    if token_id and event_dict['token_id'] != token_id:
-                        continue
-                    if resource_pattern and event_dict['resource_path']:
-                        import re
-                        if not re.match(resource_pattern, event_dict['resource_path']):
-                            continue
-                    
-                    events.append(self._dict_to_event(event_dict))
+        # Get all audit files in chronological order
+        audit_files = sorted(self.base_path.glob("audit_*.jsonl"))
         
+        for file_path in audit_files:
+            try:
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        event_dict = json.loads(line.strip())
+                        
+                        # Apply filters
+                        event_time = datetime.fromisoformat(event_dict['timestamp'])
+                        if start_time and event_time < start_time:
+                            continue
+                        if end_time and event_time > end_time:
+                            continue
+                        if event_types and event_dict['event_type'] not in [t.name for t in event_types]:
+                            continue
+                        if user_id and event_dict['user_id'] != user_id:
+                            continue
+                        if severity and event_dict['severity'] != severity.name:
+                            continue
+                            
+                        # Convert dict back to AuditEvent
+                        event = AuditEvent(
+                            event_id=event_dict['event_id'],
+                            timestamp=event_time,
+                            event_type=AuditEventType[event_dict['event_type']],
+                            severity=AuditSeverity[event_dict['severity']],
+                            safety_level=SafetyLevel[event_dict['safety_level']],
+                            access_scope=AccessScope[event_dict['access_scope']],
+                            token_id=event_dict['token_id'],
+                            user_id=event_dict['user_id'],
+                            resource_path=event_dict['resource_path'],
+                            operation=Permission[event_dict['operation']] if event_dict['operation'] else None,
+                            details=event_dict['details'],
+                            metadata=event_dict['metadata'],
+                            parent_event_id=event_dict['parent_event_id']
+                        )
+                        events.append(event)
+                        
+            except Exception as e:
+                logging.error(f"Error reading audit file {file_path}: {str(e)}")
+                
         return events
-
-    def _dict_to_event(self, event_dict: Dict) -> AuditEvent:
-        """Convert dictionary to AuditEvent"""
-        return AuditEvent(
-            event_id=event_dict['event_id'],
-            timestamp=datetime.fromisoformat(event_dict['timestamp']),
-            event_type=AuditEventType[event_dict['event_type']],
-            severity=AuditSeverity[event_dict['severity']],
-            safety_level=SafetyLevel[event_dict['safety_level']],
-            access_scope=AccessScope[event_dict['access_scope']],
-            token_id=event_dict['token_id'],
-            user_id=event_dict['user_id'],
-            resource_path=event_dict['resource_path'],
-            operation=Permission[event_dict['operation']] if event_dict['operation'] else None,
-            details=event_dict['details'],
-            metadata=event_dict['metadata'],
-            parent_event_id=event_dict['parent_event_id']
-        )
 
 
 class AuditLogger:
@@ -192,8 +210,10 @@ class AuditLogger:
                 event = self.event_queue.get(timeout=1.0)
                 self.store.store_event(event)
                 self.event_queue.task_done()
-            except Queue.Empty:
+            except Empty:
                 continue
+            except Exception as e:
+                logging.error(f"Error processing event: {str(e)}")
 
     def stop(self):
         """Stop the audit logger"""

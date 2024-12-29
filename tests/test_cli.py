@@ -126,22 +126,17 @@ class TestCommandLineInterface(unittest.TestCase):
 
     def test_init_command(self):
         # Run init command
-        args = ["init", "--dir", self.temp_dir]
+        args = ["init", "--path", self.temp_dir]
         exit_code = self.cli.run(args)
+        self.assertEqual(exit_code, 0)
         
-        # Check if config file was created
-        config_path = Path(self.temp_dir) / "sacp.yaml"
+        # Check config file was created
+        config_path = Path(self.temp_dir) / '.sacp.json'
         self.assertTrue(config_path.exists())
         
-        # Verify config content
         with open(config_path) as f:
-            config = yaml.safe_load(f)
-        
-        self.assertEqual(config["version"], "1.0.0")
-        self.assertEqual(config["compliance_level"], "standard")
-        self.assertTrue("properties" in config)
-        self.assertTrue("custom_rules" in config)
-        self.assertEqual(exit_code, 0)
+            config = json.load(f)
+            self.assertEqual(config['safety_level'], 'CONTROLLED')
 
     def test_output_formats(self):
         # Create test file

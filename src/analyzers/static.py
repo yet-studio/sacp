@@ -13,9 +13,8 @@ import logging
 import astroid
 from pylint.lint import Run
 from pylint.reporters import JSONReporter
-from bandit.core.manager import BanditManager
-from bandit.core.config import BanditConfig
-from bandit.core.meta import MetaAst
+import bandit
+from bandit.core import manager, config
 import safety.util
 import safety.safety
 
@@ -105,47 +104,87 @@ class PatternAnalyzer:
 
 
 class SecurityAnalyzer:
-    """Analyzes code for security vulnerabilities using Bandit"""
-
+    """Analyzes code for security issues using Bandit and custom rules"""
+    
     def __init__(self):
-        self.config = BanditConfig()
-        self.config.set_profile()  # Use default security profile
+        self.pattern_analyzer = PatternAnalyzer()
 
-    def analyze_file(self, file_path: str) -> List[AnalysisResult]:
-        """Analyze a file for security issues"""
+    def analyze_file(self, file_path: str, rules: Optional[Dict] = None) -> List[AnalysisResult]:
+        """Analyze a single file for security issues"""
         results = []
         
+        # First run Bandit analysis
         try:
-            manager = BanditManager(self.config, 'file')
-            manager.discover_files([file_path])
-            manager.run_tests()
-            
-            for issue in manager.get_issue_list():
+            import bandit
+            from bandit.core import manager
+            from bandit.core import config
+            from bandit.core import metrics
+            from bandit.core import issue
+
+            # Initialize Bandit manager with basic config
+            b_mgr = manager.BanditManager(
+                config.BanditConfig(),
+                'file'
+            )
+
+            # Run analysis
+            b_mgr.discover_files([file_path])
+            b_mgr.run_tests()
+
+            # Convert Bandit issues to our format
+            for issue in b_mgr.get_issue_list():
+                severity = self._convert_severity(issue.severity)
                 results.append(AnalysisResult(
                     analysis_type=AnalysisType.SECURITY_SCAN,
-                    severity=self._convert_severity(issue.severity),
+                    severity=severity,
                     file_path=file_path,
                     line_number=issue.lineno,
-                    message=issue.text,
-                    code=issue.line,
+                    message=f"{issue.test_id}: {issue.text}",
                     metadata={
                         'test_id': issue.test_id,
-                        'confidence': issue.confidence
+                        'confidence': issue.confidence,
+                        'cwe': getattr(issue, 'cwe', None)
                     }
                 ))
+
         except Exception as e:
-            logging.error(f"Error security scanning {file_path}: {str(e)}")
-        
+            logging.error(f"Error running security analysis on {file_path}: {str(e)}")
+            
+        # Then run custom rule analysis if provided
+        if rules:
+            try:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                    lines = content.split('\n')
+                    
+                    for rule_name, rule_info in rules.items():
+                        pattern = rule_info.get('pattern')
+                        if pattern:
+                            matches = re.finditer(pattern, content)
+                            for match in matches:
+                                line_no = content.count('\n', 0, match.start()) + 1
+                                results.append(AnalysisResult(
+                                    analysis_type=AnalysisType.PATTERN_MATCH,
+                                    severity=Severity.ERROR,  # Custom rules are treated as errors
+                                    file_path=file_path,
+                                    line_number=line_no,
+                                    message=rule_info.get('description', f'Violated rule: {rule_name}'),
+                                    code=lines[line_no - 1].strip(),
+                                    metadata={'rule_name': rule_name}
+                                ))
+            except Exception as e:
+                logging.error(f"Error applying custom rules to {file_path}: {str(e)}")
+            
         return results
 
     def _convert_severity(self, bandit_severity: str) -> Severity:
         """Convert Bandit severity to our severity level"""
-        mapping = {
+        severity_map = {
             'LOW': Severity.INFO,
             'MEDIUM': Severity.WARNING,
             'HIGH': Severity.ERROR
         }
-        return mapping.get(bandit_severity, Severity.WARNING)
+        return severity_map.get(bandit_severity, Severity.WARNING)
 
 
 class StyleAnalyzer:
@@ -188,42 +227,63 @@ class StyleAnalyzer:
 
 class DependencyAnalyzer:
     """Analyzes project dependencies for security issues"""
-
+    
     def analyze_requirements(self, requirements_file: str) -> List[AnalysisResult]:
         """Analyze requirements.txt for known vulnerabilities"""
         results = []
-        
         try:
-            packages = safety.util.read_requirements(requirements_file)
-            vulns = safety.safety.check(packages=packages)
+            with open(requirements_file, 'r') as f:
+                requirements = f.read().splitlines()
             
-            for vuln in vulns:
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.DEP_CHECK,
-                    severity=self._convert_severity(vuln.severity),
-                    file_path=requirements_file,
-                    line_number=0,  # Requirements files don't have relevant line numbers
-                    message=f"Vulnerability in {vuln.package_name}: {vuln.advisory}",
-                    metadata={
-                        'package': vuln.package_name,
-                        'installed_version': vuln.installed_version,
-                        'vulnerable_spec': vuln.vulnerable_spec
-                    }
-                ))
+            # Parse requirements into packages
+            packages = []
+            for req in requirements:
+                req = req.strip()
+                if req and not req.startswith('#'):
+                    if '==' in req:
+                        name, version = req.split('==')
+                        packages.append((name.strip(), version.strip()))
+            
+            # Check each package using safety
+            from safety import safety
+            for name, version in packages:
+                try:
+                    package_str = f"{name}=={version}"
+                    vulns = safety.check([package_str])
+                    
+                    if vulns:
+                        for vuln in vulns:
+                            severity = self._convert_severity(vuln.get('severity', 'unknown'))
+                            results.append(AnalysisResult(
+                                analysis_type=AnalysisType.DEP_CHECK,
+                                severity=severity,
+                                file_path=requirements_file,
+                                line_number=0,  # Requirements file
+                                message=f"Vulnerability in {name}=={version}: {vuln.get('advisory', 'Unknown vulnerability')}",
+                                metadata={
+                                    'package': name,
+                                    'version': version,
+                                    'vuln_id': vuln.get('id', 'unknown')
+                                }
+                            ))
+                except Exception as e:
+                    logging.error(f"Error checking {name}: {str(e)}")
+                    
         except Exception as e:
             logging.error(f"Error checking dependencies in {requirements_file}: {str(e)}")
-        
+            
         return results
 
     def _convert_severity(self, safety_severity: str) -> Severity:
         """Convert Safety severity to our severity level"""
-        mapping = {
+        severity_map = {
             'low': Severity.INFO,
             'medium': Severity.WARNING,
             'high': Severity.ERROR,
-            'critical': Severity.CRITICAL
+            'critical': Severity.CRITICAL,
+            'unknown': Severity.WARNING  # Default to WARNING for unknown severity
         }
-        return mapping.get(safety_severity, Severity.WARNING)
+        return severity_map.get(safety_severity.lower(), Severity.WARNING)
 
 
 class StaticAnalysisEngine:
@@ -236,7 +296,7 @@ class StaticAnalysisEngine:
         self.dependency_analyzer = DependencyAnalyzer()
         self.results: List[AnalysisResult] = []
 
-    def analyze_file(self, file_path: str) -> List[AnalysisResult]:
+    def analyze_file(self, file_path: str, security_rules: Optional[Dict] = None) -> List[AnalysisResult]:
         """Run all applicable analyzers on a file"""
         self.results = []
         
@@ -246,19 +306,19 @@ class StaticAnalysisEngine:
         
         # Run all analyzers
         self.results.extend(self.pattern_analyzer.analyze_file(file_path))
-        self.results.extend(self.security_analyzer.analyze_file(file_path))
+        self.results.extend(self.security_analyzer.analyze_file(file_path, security_rules))
         self.results.extend(self.style_analyzer.analyze_file(file_path))
         
         return self.results
 
-    def analyze_project(self, project_path: str) -> List[AnalysisResult]:
+    def analyze_project(self, project_path: str, security_rules: Optional[Dict] = None) -> List[AnalysisResult]:
         """Analyze an entire project"""
         self.results = []
         project_path = Path(project_path)
         
         # Analyze Python files
         for py_file in project_path.rglob('*.py'):
-            self.results.extend(self.analyze_file(str(py_file)))
+            self.results.extend(self.analyze_file(str(py_file), security_rules))
         
         # Analyze dependencies
         requirements_file = project_path / 'requirements.txt'

@@ -103,7 +103,7 @@ class TestAuditSystem(unittest.TestCase):
 
         # Test filtering by severity
         warning_events = self.store.query_events(
-            severities=[AuditSeverity.WARNING]
+            severity=AuditSeverity.WARNING
         )
         self.assertEqual(len(warning_events), 1)
 
@@ -148,7 +148,7 @@ class TestAuditSystem(unittest.TestCase):
     def test_file_rotation(self):
         # Set a very small file size limit for testing
         self.store.file_size_limit = 100  # bytes
-
+        
         # Log enough events to trigger rotation
         for i in range(10):
             self.logger.log_event(
@@ -157,16 +157,17 @@ class TestAuditSystem(unittest.TestCase):
                 safety_level=SafetyLevel.CONTROLLED,
                 access_scope=AccessScope.PROJECT,
                 user_id="test_user",
-                details={"large": "x" * 50}  # Make event data large
+                details={"large": "x" * 200}  # Make event data large enough to force rotation
             )
+            time.sleep(0.01)  # Give a small delay to ensure different timestamps
 
         # Wait for events to be processed
         self.logger.event_queue.join()
-        time.sleep(0.1)
+        time.sleep(0.1)  # Give a bit more time for file writing
 
         # Check that multiple log files were created
         log_files = list(Path(self.temp_dir).glob("audit_*.jsonl"))
-        self.assertGreater(len(log_files), 1)
+        self.assertGreater(len(log_files), 1, f"Expected multiple log files, got {len(log_files)}")
 
         # Verify all events can still be queried
         all_events = self.store.query_events()

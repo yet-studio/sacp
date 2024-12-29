@@ -3,26 +3,101 @@ SafeAI CodeGuard Protocol - Core Protocol Implementation
 Defines the fundamental safety constraints and validation rules for AI code interactions.
 """
 
-from enum import Enum, auto
+from enum import Enum, auto, IntEnum
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
 
-class SafetyLevel(Enum):
+class SafetyLevel(IntEnum):
     """Defines the safety levels for AI code interactions"""
-    READ_ONLY = auto()      # AI can only read and analyze code
-    SUGGEST_ONLY = auto()   # AI can suggest changes but cannot modify
-    CONTROLLED = auto()     # AI can modify with strict validation
-    FULL_ACCESS = auto()    # Advanced mode with comprehensive logging
+    READ_ONLY = 1      # AI can only read and analyze code
+    SUGGEST_ONLY = 2   # AI can suggest changes but cannot modify
+    CONTROLLED = 3     # AI can modify with strict validation
+    FULL_ACCESS = 4    # Advanced mode with comprehensive logging
+
+    def __lt__(self, other):
+        if not isinstance(other, SafetyLevel):
+            return NotImplemented
+        return self.value < other.value
+
+    def __le__(self, other):
+        if not isinstance(other, SafetyLevel):
+            return NotImplemented
+        return self.value <= other.value
+
+    def __gt__(self, other):
+        if not isinstance(other, SafetyLevel):
+            return NotImplemented
+        return self.value > other.value
+
+    def __ge__(self, other):
+        if not isinstance(other, SafetyLevel):
+            return NotImplemented
+        return self.value >= other.value
 
 
-class AccessScope(Enum):
+class ComplianceLevel(IntEnum):
+    """Compliance levels for safety verification"""
+    BASIC = 1
+    STANDARD = 2
+    STRICT = 3
+
+
+class AccessScope(IntEnum):
     """Defines the scope of access for AI operations"""
-    SINGLE_FILE = auto()    # Limited to one file
-    DIRECTORY = auto()      # Limited to specific directory
-    PROJECT = auto()        # Full project access
-    WORKSPACE = auto()      # Multiple project access
+    SINGLE_FILE = 1    # Limited to one file
+    DIRECTORY = 2      # Limited to specific directory
+    PROJECT = 3        # Full project access
+    WORKSPACE = 4      # Multiple project access
+
+    def __lt__(self, other):
+        if not isinstance(other, AccessScope):
+            return NotImplemented
+        return self.value < other.value
+
+    def __le__(self, other):
+        if not isinstance(other, AccessScope):
+            return NotImplemented
+        return self.value <= other.value
+
+    def __gt__(self, other):
+        if not isinstance(other, AccessScope):
+            return NotImplemented
+        return self.value > other.value
+
+    def __ge__(self, other):
+        if not isinstance(other, AccessScope):
+            return NotImplemented
+        return self.value >= other.value
+
+
+class RiskLevel(IntEnum):
+    """Risk levels for operations"""
+    LOW = 1
+    MODERATE = 2
+    HIGH = 3
+    CRITICAL = 4
+
+    def __lt__(self, other):
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.value < other.value
+
+    def __le__(self, other):
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.value <= other.value
+
+    def __gt__(self, other):
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.value > other.value
+
+    def __ge__(self, other):
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.value >= other.value
 
 
 @dataclass
@@ -40,6 +115,7 @@ class ProtocolConfig:
     """Main configuration for the SACP protocol"""
     safety_level: SafetyLevel
     access_scope: AccessScope
+    compliance_level: ComplianceLevel
     constraints: SafetyConstraints
     session_id: str
     created_at: datetime

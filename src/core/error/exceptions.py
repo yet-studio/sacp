@@ -80,6 +80,29 @@ class ResourceExhaustedError(SACPError):
         )
 
 
+class ResourceLimitError(SACPError):
+    """Raised when resource limits are exceeded"""
+    
+    def __init__(
+        self,
+        message: str,
+        resource_type: str,
+        current_usage: float,
+        limit: float,
+        **kwargs
+    ):
+        super().__init__(
+            message,
+            error_code='RESOURCE_LIMIT_EXCEEDED',
+            details={
+                'resource_type': resource_type,
+                'current_usage': current_usage,
+                'limit': limit
+            },
+            **kwargs
+        )
+
+
 class ConfigurationError(SACPError):
     """Raised when there's an error in system configuration"""
     

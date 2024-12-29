@@ -99,7 +99,26 @@ class SyntaxRule(BaseRule):
         super().__init__('SYNTAX_CHECK')
 
     def validate(self, context: Dict[str, Any]) -> ValidationResult:
+        """Validate Python code syntax"""
         code = context.get('code', '')
+        if not code:
+            return ValidationResult(
+                is_valid=False,
+                rule_id=self.rule_id,
+                message="No code provided for syntax check",
+                severity=self.severity
+            )
+
+        # Remove any leading whitespace to avoid indentation errors
+        code = code.strip()
+        if not code:
+            return ValidationResult(
+                is_valid=False,
+                rule_id=self.rule_id,
+                message="Empty code after stripping whitespace",
+                severity=self.severity
+            )
+
         try:
             ast.parse(code)
             return ValidationResult(
@@ -114,7 +133,14 @@ class SyntaxRule(BaseRule):
                 rule_id=self.rule_id,
                 message=f"Syntax error: {str(e)}",
                 severity=self.severity,
-                context={'line': e.lineno, 'offset': e.offset}
+                context={'error': str(e), 'line': e.lineno, 'offset': e.offset}
+            )
+        except Exception as e:
+            return ValidationResult(
+                is_valid=False,
+                rule_id=self.rule_id,
+                message=f"Error parsing code: {str(e)}",
+                severity=self.severity
             )
 
 

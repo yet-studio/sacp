@@ -18,6 +18,7 @@ import unittest
 import coverage
 import z3
 from mypy import api as mypy_api
+from ..core.protocol import ComplianceLevel
 
 
 class VerificationType(Enum):
@@ -26,14 +27,6 @@ class VerificationType(Enum):
     PROPERTY = auto()     # Safety property validation
     COMPLIANCE = auto()   # Compliance rule checking
     TEST = auto()         # Test suite verification
-
-
-class ComplianceLevel(Enum):
-    """Compliance levels for verification"""
-    MINIMAL = auto()      # Basic safety checks
-    STANDARD = auto()     # Standard compliance rules
-    STRICT = auto()       # Strict safety enforcement
-    CRITICAL = auto()     # Mission-critical safety
 
 
 @dataclass
@@ -351,11 +344,56 @@ class PropertyValidator:
 
 
 class ComplianceChecker:
-    """Checks code compliance with safety rules"""
+    """Checks code compliance against safety rules"""
 
     def __init__(self, compliance_level: ComplianceLevel):
         self.compliance_level = compliance_level
         self.rules = self._load_compliance_rules()
+
+    def _load_compliance_rules(self) -> Dict[str, Any]:
+        """Load compliance rules based on level"""
+        rules = {
+            'no_eval_exec': {
+                'description': 'No use of eval() or exec()',
+                'pattern': r'(eval|exec)\s*\('
+            },
+            'no_shell_injection': {
+                'description': 'No shell injection vulnerabilities',
+                'pattern': r'os\.system\(|subprocess\.call\('
+            },
+            'no_hardcoded_secrets': {
+                'description': 'No hardcoded secrets',
+                'pattern': r'(password|secret|key)\s*=\s*["\'][^"\']+["\']'
+            }
+        }
+
+        # Add standard rules
+        if self.compliance_level >= ComplianceLevel.STANDARD:
+            rules.update({
+                'no_unsafe_pickle': {
+                    'description': 'No unsafe pickle usage',
+                    'pattern': r'pickle\.loads?\('
+                },
+                'no_unsafe_yaml': {
+                    'description': 'No unsafe YAML loading',
+                    'pattern': r'yaml\.load\('
+                }
+            })
+
+        # Add strict rules
+        if self.compliance_level >= ComplianceLevel.STRICT:
+            rules.update({
+                'no_dynamic_code': {
+                    'description': 'No dynamic code execution',
+                    'pattern': r'(compile|importlib\.import_module)\('
+                },
+                'no_file_writes': {
+                    'description': 'No direct file writes',
+                    'pattern': r'(open|file)\([^)]+,(.*w.*)\)'
+                }
+            })
+
+        return rules
 
     def check_compliance(
         self,
@@ -408,49 +446,6 @@ class ComplianceChecker:
                 details={'error': str(e)},
                 violations=[]
             )
-
-    def _load_compliance_rules(self) -> Dict[str, Any]:
-        """Load compliance rules based on level"""
-        base_rules = {
-            'no_eval_exec': {
-                'description': 'No use of eval() or exec()',
-                'pattern': r'(eval|exec)\s*\('
-            },
-            'no_shell_injection': {
-                'description': 'No shell injection vulnerabilities',
-                'pattern': r'os\.system\(|subprocess\.call\('
-            },
-            'no_hardcoded_secrets': {
-                'description': 'No hardcoded secrets',
-                'pattern': r'(password|secret|key)\s*=\s*["\'][^"\']+["\']'
-            }
-        }
-        
-        if self.compliance_level >= ComplianceLevel.STANDARD:
-            base_rules.update({
-                'proper_error_handling': {
-                    'description': 'Proper error handling required',
-                    'pattern': r'try\s*:'
-                },
-                'input_validation': {
-                    'description': 'Input validation required',
-                    'pattern': r'def\s+\w+\s*\([^)]*\)\s*:'
-                }
-            })
-        
-        if self.compliance_level >= ComplianceLevel.STRICT:
-            base_rules.update({
-                'type_annotations': {
-                    'description': 'Type annotations required',
-                    'pattern': r'def\s+\w+\s*\([^)]*\)\s*->'
-                },
-                'docstring_required': {
-                    'description': 'Docstrings required',
-                    'pattern': r'"""[^"]*"""'
-                }
-            })
-        
-        return base_rules
 
     def _check_rule(self, tree: ast.AST, rule_data: Dict[str, Any]) -> bool:
         """Check if code complies with a rule"""

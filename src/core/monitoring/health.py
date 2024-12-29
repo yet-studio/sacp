@@ -80,8 +80,13 @@ class HealthMonitor:
     
     def get_status(self) -> Dict[str, Any]:
         """Gets current health status"""
+        # Initialize health status for any checks that haven't run yet
+        for name in self.health_checks:
+            if name not in self.health_status:
+                self.health_status[name] = False
+                
         return {
-            'healthy': all(self.health_status.values()),
+            'healthy': all(self.health_status.values()) if self.health_status else False,
             'checks': self.health_status.copy(),
             'timestamp': datetime.now().isoformat()
         }

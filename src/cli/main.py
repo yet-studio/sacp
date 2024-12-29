@@ -1,382 +1,351 @@
 """
 SafeAI CodeGuard Protocol - Command Line Interface
-Provides CLI tools for code verification, compliance checking, and behavior analysis.
+Main CLI implementation.
 """
 
 import argparse
-import json
-import logging
 import sys
+import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from enum import Enum, auto
+from typing import List, Optional
+import json
 import yaml
 
-from src.verification.safety import (
-    SafetyVerification,
-    SafetyProperty,
-    ComplianceLevel,
-    VerificationResult
-)
-from src.constraints.behavior import (
-    BehaviorConstraints,
-    IntentType,
-    ContextType
-)
-from src.core.protocol import SafetyLevel
+from ..core.protocol import ComplianceLevel, SafetyLevel
+from ..analyzers.static import SecurityAnalyzer
+from ..verification.safety import SafetyVerification
 
 
-class OutputFormat(Enum):
+class OutputFormat(str):
     """Output format options"""
-    TEXT = auto()
-    JSON = auto()
-    YAML = auto()
+    TEXT = 'text'
+    JSON = 'json'
+    YAML = 'yaml'
 
 
 class CommandLineInterface:
-    """Main CLI class for SACP"""
+    """Command line interface for SACP"""
 
     def __init__(self):
-        self.safety_verifier = SafetyVerification(ComplianceLevel.STANDARD)
-        self.behavior_constraints = BehaviorConstraints()
-        self.logger = self._setup_logger()
-
-    def _setup_logger(self) -> logging.Logger:
-        """Set up logging configuration"""
-        logger = logging.getLogger("sacp-cli")
-        logger.setLevel(logging.INFO)
-        
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(
-            logging.Formatter(
-                '%(asctime)s - %(levelname)s - %(message)s'
-            )
-        )
-        
-        logger.addHandler(handler)
-        return logger
-
-    def run(self, args: List[str]) -> int:
-        """Run the CLI with given arguments"""
-        parser = self._create_parser()
-        parsed_args = parser.parse_args(args)
-        
-        try:
-            if parsed_args.command == "verify":
-                return self._handle_verify(parsed_args)
-            elif parsed_args.command == "check":
-                return self._handle_check(parsed_args)
-            elif parsed_args.command == "analyze":
-                return self._handle_analyze(parsed_args)
-            elif parsed_args.command == "init":
-                return self._handle_init(parsed_args)
-            else:
-                self.logger.error(f"Unknown command: {parsed_args.command}")
-                return 1
-                
-        except Exception as e:
-            self.logger.error(f"Error: {str(e)}")
-            return 1
+        self.parser = self._create_parser()
+        self.security_analyzer = SecurityAnalyzer()
+        self.safety_verification = SafetyVerification()
 
     def _create_parser(self) -> argparse.ArgumentParser:
         """Create argument parser"""
         parser = argparse.ArgumentParser(
-            description="SafeAI CodeGuard Protocol CLI"
+            description='SafeAI CodeGuard Protocol CLI'
         )
         
-        parser.add_argument(
-            "--format",
-            choices=["text", "json", "yaml"],
-            default="text",
-            help="Output format"
-        )
+        subparsers = parser.add_subparsers(dest='command')
         
-        subparsers = parser.add_subparsers(dest="command", required=True)
+        # Init command
+        init_parser = subparsers.add_parser(
+            'init',
+            help='Initialize SACP for a project'
+        )
+        init_parser.add_argument(
+            '--path',
+            type=str,
+            default='.',
+            help='Project path'
+        )
+        init_parser.add_argument(
+            '--safety-level',
+            type=str,
+            choices=[level.name for level in SafetyLevel],
+            default=SafetyLevel.CONTROLLED.name,
+            help='Safety level'
+        )
+        init_parser.add_argument(
+            '--format',
+            type=str,
+            choices=['text', 'json', 'yaml'],
+            default='text',
+            help='Output format'
+        )
         
         # Verify command
         verify_parser = subparsers.add_parser(
-            "verify",
-            help="Verify code safety"
+            'verify',
+            help='Verify code safety'
         )
         verify_parser.add_argument(
-            "path",
+            'path',
             type=str,
-            help="Path to file or directory to verify"
+            help='Path to verify'
         )
         verify_parser.add_argument(
-            "--config",
+            '--compliance-level',
             type=str,
-            help="Path to configuration file"
+            choices=[level.name for level in ComplianceLevel],
+            default=ComplianceLevel.STANDARD.name,
+            help='Compliance level'
         )
         verify_parser.add_argument(
-            "--level",
-            choices=["minimal", "standard", "strict", "critical"],
-            default="standard",
-            help="Verification level"
+            '--config',
+            type=str,
+            help='Path to config file'
+        )
+        verify_parser.add_argument(
+            '--format',
+            type=str,
+            choices=['text', 'json', 'yaml'],
+            default='text',
+            help='Output format'
         )
         
         # Check command
         check_parser = subparsers.add_parser(
-            "check",
-            help="Check code compliance"
+            'check',
+            help='Check code against rules'
         )
         check_parser.add_argument(
-            "path",
+            'path',
             type=str,
-            help="Path to file or directory to check"
+            help='Path to check'
         )
         check_parser.add_argument(
-            "--rules",
+            '--rules',
             type=str,
-            help="Path to custom rules file"
+            help='Path to rules file'
+        )
+        check_parser.add_argument(
+            '--format',
+            type=str,
+            choices=['text', 'json', 'yaml'],
+            default='text',
+            help='Output format'
         )
         
         # Analyze command
         analyze_parser = subparsers.add_parser(
-            "analyze",
-            help="Analyze AI behavior"
+            'analyze',
+            help='Analyze code behavior'
         )
         analyze_parser.add_argument(
-            "path",
+            'path',
             type=str,
-            help="Path to file or directory to analyze"
+            help='Path to analyze'
         )
         analyze_parser.add_argument(
-            "--context",
+            '--context',
             type=str,
-            help="Path to context file"
+            help='Path to context file'
         )
-        
-        # Init command
-        init_parser = subparsers.add_parser(
-            "init",
-            help="Initialize SACP configuration"
-        )
-        init_parser.add_argument(
-            "--dir",
+        analyze_parser.add_argument(
+            '--format',
             type=str,
-            default=".",
-            help="Directory to initialize"
+            choices=['text', 'json', 'yaml'],
+            default='text',
+            help='Output format'
         )
         
         return parser
 
-    def _handle_verify(self, args: argparse.Namespace) -> int:
-        """Handle verify command"""
-        path = Path(args.path)
-        if not path.exists():
-            self.logger.error(f"Path does not exist: {path}")
+    def run(self, args: Optional[List[str]] = None) -> int:
+        """Run CLI with arguments"""
+        if args is None:
+            args = sys.argv[1:]
+            
+        try:
+            parsed_args = self.parser.parse_args(args)
+            
+            if parsed_args.command == 'init':
+                return self._handle_init(parsed_args)
+            elif parsed_args.command == 'verify':
+                return self._handle_verify(parsed_args)
+            elif parsed_args.command == 'check':
+                return self._handle_check(parsed_args)
+            elif parsed_args.command == 'analyze':
+                return self._handle_analyze(parsed_args)
+            else:
+                self.parser.print_help()
+                return 1
+                
+        except argparse.ArgumentError as e:
+            logging.error(f"Argument error: {str(e)}")
             return 1
+        except SystemExit as e:
+            # Convert argparse's sys.exit(2) to return code 1
+            return 1 if e.code == 2 else e.code
+        except Exception as e:
+            logging.error(f"Error: {str(e)}")
+            return 1
+
+    def _handle_init(self, args) -> int:
+        """Handle init command"""
+        project_path = Path(args.path).resolve()
+        if not project_path.exists():
+            logging.error(f"Project path does not exist: {project_path}")
+            return 1
+            
+        safety_level = SafetyLevel[args.safety_level]
         
-        # Load configuration
-        config = self._load_config(args.config) if args.config else {}
+        # Create config file
+        config = {
+            'safety_level': safety_level.name,
+            'initialized_at': str(project_path),
+            'version': '1.0.0'
+        }
         
-        # Get properties from config
-        properties = self._get_properties_from_config(config)
+        config_path = project_path / '.sacp.json'
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+            
+        self._output(f"Initialized SACP in {project_path}", args)
+        return 0
+
+    def _handle_verify(self, args) -> int:
+        """Handle verify command"""
+        path = Path(args.path).resolve()
+        if not path.exists():
+            logging.error(f"Path does not exist: {path}")
+            return 1
+            
+        compliance_level = ComplianceLevel[args.compliance_level]
         
         # Run verification
-        results = self.safety_verifier.verify_codebase(
+        results = self.safety_verification.verify(
             str(path),
-            properties,
-            coverage_threshold=config.get("coverage_threshold", 80.0)
+            compliance_level=compliance_level
         )
         
-        # Output results
-        self._output_results(results, args.format)
-        
-        # Return 1 if any verification failed
-        return 1 if any(not r.success for r in results) else 0
+        self._output_results(results, args)
+        return 0 if results.passed else 1
 
-    def _handle_check(self, args: argparse.Namespace) -> int:
+    def _handle_check(self, args) -> int:
         """Handle check command"""
-        path = Path(args.path)
+        path = Path(args.path).resolve()
         if not path.exists():
-            self.logger.error(f"Path does not exist: {path}")
+            logging.error(f"Path does not exist: {path}")
             return 1
-        
-        # Load custom rules
-        custom_rules = None
+            
+        # Load rules
+        rules = {}
         if args.rules:
-            rules_path = Path(args.rules)
+            rules_path = Path(args.rules).resolve()
             if not rules_path.exists():
-                self.logger.error(f"Rules file does not exist: {rules_path}")
+                logging.error(f"Rules file does not exist: {rules_path}")
                 return 1
+                
             with open(rules_path) as f:
-                custom_rules = yaml.safe_load(f)
+                rules = yaml.safe_load(f)
         
-        # Run compliance check
-        result = self.safety_verifier.compliance_checker.check_compliance(
+        # Run checks
+        results = self.security_analyzer.analyze_file(
             str(path),
-            custom_rules
+            rules=rules
         )
         
-        # Output results
-        self._output_results([result], args.format)
-        
-        return 1 if not result.success else 0
+        self._output_results(results, args)
+        # Return 1 if any high severity issues found
+        return 0 if not results else 1
 
-    def _handle_analyze(self, args: argparse.Namespace) -> int:
+    def _handle_analyze(self, args) -> int:
         """Handle analyze command"""
-        path = Path(args.path)
+        path = Path(args.path).resolve()
         if not path.exists():
-            self.logger.error(f"Path does not exist: {path}")
+            logging.error(f"Path does not exist: {path}")
             return 1
-        
+            
         # Load context
-        context = None
+        context = {}
         if args.context:
-            context_path = Path(args.context)
+            context_path = Path(args.context).resolve()
             if not context_path.exists():
-                self.logger.error(f"Context file does not exist: {context_path}")
+                logging.error(f"Context file does not exist: {context_path}")
                 return 1
+                
             with open(context_path) as f:
                 context = yaml.safe_load(f)
         
-        # Create intent for analysis
-        intent = self.behavior_constraints.create_intent(
-            intent_type=IntentType.READ,
-            description="CLI behavior analysis",
-            target_paths=[str(path)],
-            required_permissions={"READ"},
-            user_id="cli",
-            session_data=context or {}
-        )
+        # Run analysis
+        results = self.security_analyzer.analyze_file(str(path))
         
-        if not intent:
-            self.logger.error("Failed to create analysis intent")
-            return 1
-        
-        # Output results
-        self._output_results([intent.validation_result], args.format)
-        
-        return 1 if not intent.is_valid else 0
-
-    def _handle_init(self, args: argparse.Namespace) -> int:
-        """Handle init command"""
-        dir_path = Path(args.dir)
-        if not dir_path.exists():
-            self.logger.error(f"Directory does not exist: {dir_path}")
-            return 1
-        
-        # Create default configuration
-        config = {
-            "version": "1.0.0",
-            "compliance_level": "standard",
-            "coverage_threshold": 80.0,
-            "properties": [
-                {
-                    "name": "no_eval_exec",
-                    "description": "No use of eval() or exec()",
-                    "property_type": "invariant",
-                    "expression": "'eval' not in code and 'exec' not in code",
-                    "severity": "CRITICAL"
-                }
-            ],
-            "custom_rules": {
-                "no_shell_injection": {
-                    "description": "No shell injection vulnerabilities",
-                    "pattern": r"os\.system\(|subprocess\.call\("
-                }
-            }
-        }
-        
-        # Write configuration file
-        config_path = dir_path / "sacp.yaml"
-        with open(config_path, "w") as f:
-            yaml.safe_dump(config, f, sort_keys=False)
-        
-        self.logger.info(f"Created configuration file: {config_path}")
+        self._output_results(results, args)
         return 0
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
-        """Load configuration from file"""
-        with open(config_path) as f:
-            return yaml.safe_load(f)
-
-    def _get_properties_from_config(
-        self,
-        config: Dict[str, Any]
-    ) -> List[SafetyProperty]:
-        """Get safety properties from configuration"""
-        properties = []
-        
-        for prop_data in config.get("properties", []):
-            properties.append(
-                SafetyProperty(
-                    name=prop_data["name"],
-                    description=prop_data["description"],
-                    property_type=prop_data["property_type"],
-                    expression=prop_data["expression"],
-                    severity=prop_data["severity"]
-                )
-            )
-        
-        return properties
-
-    def _output_results(
-        self,
-        results: List[VerificationResult],
-        format_type: str
-    ):
-        """Output results in specified format"""
-        if format_type == "json":
-            self._output_json(results)
-        elif format_type == "yaml":
-            self._output_yaml(results)
+    def _output(self, message: str, args):
+        """Output message in specified format"""
+        if args.format == OutputFormat.JSON:
+            print(json.dumps({'message': message}))
+        elif args.format == OutputFormat.YAML:
+            print(yaml.safe_dump({'message': message}))
         else:
-            self._output_text(results)
+            print(message)
 
-    def _output_json(self, results: List[VerificationResult]):
-        """Output results in JSON format"""
-        output = []
-        for result in results:
-            output.append({
-                "type": result.verification_type.name,
-                "success": result.success,
-                "timestamp": result.timestamp.isoformat(),
-                "details": result.details,
-                "violations": result.violations
-            })
-        
-        json.dump(output, sys.stdout, indent=2)
-        sys.stdout.write("\n")
-
-    def _output_yaml(self, results: List[VerificationResult]):
-        """Output results in YAML format"""
-        output = []
-        for result in results:
-            output.append({
-                "type": result.verification_type.name,
-                "success": result.success,
-                "timestamp": result.timestamp.isoformat(),
-                "details": result.details,
-                "violations": result.violations
-            })
-        
-        yaml.safe_dump(output, sys.stdout, sort_keys=False)
-
-    def _output_text(self, results: List[VerificationResult]):
-        """Output results in text format"""
-        for result in results:
-            print(f"Type: {result.verification_type.name}")
-            print(f"Success: {result.success}")
-            print(f"Timestamp: {result.timestamp}")
-            print("Details:")
-            for key, value in result.details.items():
-                print(f"  {key}: {value}")
+    def _output_results(self, results, args):
+        """Output results in specified format"""
+        if isinstance(results, list):
+            # Convert list of results to dict format
+            results_dict = {
+                'results': [
+                    {
+                        'severity': str(r.severity),
+                        'message': str(r.message) if hasattr(r, 'message') else '',
+                        'file': str(r.file) if hasattr(r, 'file') else '',
+                        'line': r.line if hasattr(r, 'line') else None,
+                        'details': r.details if hasattr(r, 'details') else {}
+                    }
+                    for r in results
+                ]
+            }
             
-            if result.violations:
-                print("Violations:")
-                for violation in result.violations:
-                    print(f"  - {violation}")
-            print()
+            if args.format == OutputFormat.JSON:
+                print(json.dumps(results_dict, indent=2))
+            elif args.format == OutputFormat.YAML:
+                print(yaml.safe_dump(results_dict))
+            else:
+                self._print_results(results)
+        else:
+            # Handle single result object with to_dict method
+            if args.format == OutputFormat.JSON:
+                print(json.dumps(results.to_dict(), indent=2))
+            elif args.format == OutputFormat.YAML:
+                print(yaml.safe_dump(results.to_dict()))
+            else:
+                self._print_results(results)
+
+    def _print_results(self, results):
+        """Print results in text format"""
+        print("\nResults:")
+        print("-" * 50)
+        
+        if isinstance(results, list):
+            # Print list of results
+            for result in results:
+                print(f"\n- Severity: {result.severity}")
+                if hasattr(result, 'message'):
+                    print(f"  Message: {result.message}")
+                if hasattr(result, 'file'):
+                    print(f"  File: {result.file}")
+                if hasattr(result, 'line'):
+                    print(f"  Line: {result.line}")
+                if hasattr(result, 'details'):
+                    print(f"  Details: {result.details}")
+        else:
+            # Print single result object
+            if hasattr(results, 'passed'):
+                print(f"Status: {'PASSED' if results.passed else 'FAILED'}")
+                
+            if hasattr(results, 'violations'):
+                if results.violations:
+                    print("\nViolations:")
+                    for violation in results.violations:
+                        print(f"\n- {violation.rule_name}")
+                        print(f"  Severity: {violation.severity}")
+                        print(f"  Location: {violation.file_path}:{violation.line_number}")
+                        print(f"  Description: {violation.description}")
+                        
+            if hasattr(results, 'warnings'):
+                if results.warnings:
+                    print("\nWarnings:")
+                    for warning in results.warnings:
+                        print(f"- {warning}")
 
 
 def main():
     """Main entry point"""
     cli = CommandLineInterface()
-    sys.exit(cli.run(sys.argv[1:]))
-
-
-if __name__ == "__main__":
-    main()
+    sys.exit(cli.run())

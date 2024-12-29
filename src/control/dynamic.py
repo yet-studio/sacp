@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 import shutil
 import hashlib
-
+from ..core.error import ResourceLimitError
 
 class ResourceType(Enum):
     """Types of resources to monitor"""
@@ -59,7 +59,7 @@ class RateLimit:
 class Snapshot:
     """System state snapshot for rollback"""
     timestamp: datetime
-    files: Dict[str, str]  # path -> hash
+    files: Dict[str, bool]  # path -> exists
     resource_usage: Dict[ResourceType, float]
     metadata: Dict[str, Any]
 
@@ -169,12 +169,18 @@ class SnapshotManager:
             metadata=metadata or {}
         )
 
-        # Hash all files
+        # Create backup directory for this snapshot
+        backup_dir = self.snapshots_dir / f"backup_{snapshot.timestamp.isoformat()}"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # Store files and create backups
         for file_path in self.base_dir.rglob("*"):
             if file_path.is_file() and ".snapshots" not in str(file_path):
-                with open(file_path, "rb") as f:
-                    file_hash = hashlib.sha256(f.read()).hexdigest()
-                snapshot.files[str(file_path)] = file_hash
+                rel_path = file_path.relative_to(self.base_dir)
+                backup_path = backup_dir / rel_path
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(file_path), str(backup_path))
+                snapshot.files[str(rel_path)] = True
 
         # Save snapshot
         snapshot_path = self.snapshots_dir / f"snapshot_{snapshot.timestamp.isoformat()}.json"
@@ -206,23 +212,34 @@ class SnapshotManager:
 
     def rollback_to_snapshot(self, snapshot: Snapshot) -> bool:
         """Rollback system to a previous snapshot"""
-        # Verify files haven't been tampered with
-        for file_path, expected_hash in snapshot.files.items():
-            try:
-                with open(file_path, "rb") as f:
-                    current_hash = hashlib.sha256(f.read()).hexdigest()
-                if current_hash != expected_hash:
-                    # Restore file from backup
-                    backup_path = self.snapshots_dir / f"backup_{snapshot.timestamp.isoformat()}" / file_path
-                    if backup_path.exists():
-                        shutil.copy2(str(backup_path), file_path)
-                    else:
-                        logging.error(f"Backup not found for {file_path}")
-                        return False
-            except Exception as e:
-                logging.error(f"Error during rollback: {str(e)}")
-                return False
-        return True
+        backup_dir = self.snapshots_dir / f"backup_{snapshot.timestamp.isoformat()}"
+        if not backup_dir.exists():
+            logging.error(f"Backup directory not found: {backup_dir}")
+            return False
+
+        try:
+            # Remove files that didn't exist in snapshot
+            for file_path in self.base_dir.rglob("*"):
+                if file_path.is_file() and ".snapshots" not in str(file_path):
+                    rel_path = file_path.relative_to(self.base_dir)
+                    if str(rel_path) not in snapshot.files:
+                        file_path.unlink()
+
+            # Restore files from backup
+            for rel_path in snapshot.files:
+                src_path = backup_dir / rel_path
+                dst_path = self.base_dir / rel_path
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                if src_path.exists():
+                    shutil.copy2(str(src_path), str(dst_path))
+                else:
+                    logging.error(f"Backup file not found: {src_path}")
+                    return False
+
+            return True
+        except Exception as e:
+            logging.error(f"Error during rollback: {str(e)}")
+            return False
 
 
 class DynamicControlSystem:
@@ -240,12 +257,12 @@ class DynamicControlSystem:
         self.rate_limiter = RateLimiter(rate_limit)
         self.snapshot_manager = SnapshotManager(base_dir)
         
-        self.running = True
-        self.monitor_thread = threading.Thread(target=self._monitor_loop)
-        self.monitor_thread.daemon = True
+        self._stop_event = threading.Event()
+        self._monitor_thread = None
+        self._running = False
         
         # Resource usage history
-        self.usage_history: Dict[ResourceType, List[float]] = {
+        self.usage_history: Dict[ResourceType, List[tuple[float, float]]] = {
             rt: [] for rt in ResourceType
         }
         self.history_lock = threading.Lock()
@@ -256,92 +273,26 @@ class DynamicControlSystem:
         }
 
     def start(self):
-        """Start the monitoring system"""
-        self.running = True
-        self.monitor_thread.start()
-        logging.info("Dynamic control system started")
+        """Start the dynamic control system"""
+        if self._running:
+            return
+
+        self._running = True
+        self._stop_event.clear()
+        self._monitor_thread = threading.Thread(target=self._monitor_loop)
+        self._monitor_thread.daemon = True
+        self._monitor_thread.start()
 
     def stop(self):
-        """Stop the monitoring system"""
-        self.running = False
-        self.monitor_thread.join()
-        logging.info("Dynamic control system stopped")
+        """Stop the dynamic control system"""
+        self._stop_event.set()
+        if self._monitor_thread:
+            self._monitor_thread.join()
+        self._running = False
 
     def register_callback(self, action: ControlAction, callback: Callable):
         """Register a callback for a specific control action"""
         self.action_callbacks[action].append(callback)
-
-    def _monitor_loop(self):
-        """Main monitoring loop"""
-        while self.running:
-            try:
-                # Check resource usage
-                cpu = self.resource_monitor.get_cpu_usage()
-                memory = self.resource_monitor.get_memory_usage()
-                disk = self.resource_monitor.get_disk_usage()
-                network = self.resource_monitor.get_network_usage()
-                
-                # Update history
-                with self.history_lock:
-                    self.usage_history[ResourceType.CPU].append(cpu)
-                    self.usage_history[ResourceType.MEMORY].append(memory)
-                    self.usage_history[ResourceType.DISK].append(disk)
-                    self.usage_history[ResourceType.NETWORK].append(network)
-                    
-                    # Keep last hour of data
-                    window = 3600  # 1 hour in seconds
-                    for resource_type in ResourceType:
-                        self.usage_history[resource_type] = \
-                            self.usage_history[resource_type][-window:]
-                
-                # Check limits
-                current_usage = {
-                    ResourceType.CPU: cpu,
-                    ResourceType.MEMORY: memory,
-                    ResourceType.DISK: disk,
-                    ResourceType.NETWORK: network
-                }
-                
-                for limit in self.resource_limits:
-                    usage = current_usage[limit.resource_type]
-                    if usage > limit.hard_limit:
-                        self._trigger_action(limit.action, {
-                            "resource_type": limit.resource_type,
-                            "current_usage": usage,
-                            "limit": limit.hard_limit
-                        })
-                    elif usage > limit.soft_limit:
-                        self._trigger_action(ControlAction.WARN, {
-                            "resource_type": limit.resource_type,
-                            "current_usage": usage,
-                            "limit": limit.soft_limit
-                        })
-            
-            except Exception as e:
-                logging.error(f"Error in monitor loop: {str(e)}")
-            
-            time.sleep(1)  # Check every second
-
-    def _trigger_action(self, action: ControlAction, context: Dict[str, Any]):
-        """Trigger control action and associated callbacks"""
-        logging.info(f"Triggering action {action.name} with context {context}")
-        for callback in self.action_callbacks[action]:
-            try:
-                callback(context)
-            except Exception as e:
-                logging.error(f"Error in action callback: {str(e)}")
-
-    def check_rate_limit(self) -> bool:
-        """Check if operation is allowed under rate limit"""
-        return self.rate_limiter.try_acquire()
-
-    def create_snapshot(self, metadata: Dict[str, Any] = None) -> Snapshot:
-        """Create a new system snapshot"""
-        return self.snapshot_manager.create_snapshot(metadata)
-
-    def rollback_to_snapshot(self, snapshot: Snapshot) -> bool:
-        """Rollback to a previous snapshot"""
-        return self.snapshot_manager.rollback_to_snapshot(snapshot)
 
     def get_resource_usage(self) -> Dict[ResourceType, float]:
         """Get current resource usage"""
@@ -352,12 +303,114 @@ class DynamicControlSystem:
             ResourceType.NETWORK: self.resource_monitor.get_network_usage()
         }
 
-    def get_usage_history(
-        self,
-        resource_type: ResourceType,
-        minutes: int = 60
-    ) -> List[float]:
-        """Get resource usage history"""
+    def get_usage_history(self, resource_type: ResourceType, minutes: int = 1) -> List[tuple[float, float]]:
+        """Get resource usage history for the specified time window
+        
+        Args:
+            resource_type: Type of resource to get history for
+            minutes: Number of minutes of history to return
+            
+        Returns:
+            List of (timestamp, usage) tuples
+        """
         with self.history_lock:
-            history = self.usage_history[resource_type]
-            return history[-minutes * 60:]  # Last N minutes of data
+            if resource_type not in self.usage_history:
+                return []
+                
+            cutoff = time.time() - (minutes * 60)
+            return [
+                (ts, usage) for ts, usage in self.usage_history[resource_type]
+                if ts >= cutoff
+            ]
+
+    def create_snapshot(self, metadata: Optional[Dict[str, Any]] = None) -> Snapshot:
+        """Create a new snapshot of the current state"""
+        return self.snapshot_manager.create_snapshot(metadata)
+
+    def rollback_to_snapshot(self, snapshot: Snapshot) -> bool:
+        """Rollback system to a previous snapshot"""
+        return self.snapshot_manager.rollback_to_snapshot(snapshot)
+
+    def get_snapshots(self) -> List[Snapshot]:
+        """Get system state snapshots"""
+        return self.snapshot_manager.get_snapshots()
+
+    def _monitor_loop(self):
+        """Main monitoring loop"""
+        while not self._stop_event.is_set():
+            try:
+                self._check_resources()
+                time.sleep(1)  # Check every second
+            except Exception as e:
+                logging.error(f"Error in monitoring loop: {e}")
+
+    def _check_resources(self):
+        """Check system resource usage"""
+        current_usage = self.get_resource_usage()
+        current_time = time.time()
+
+        # Update history
+        with self.history_lock:
+            for rt, usage in current_usage.items():
+                self.usage_history[rt].append((current_time, usage))
+                # Keep last hour of data
+                cutoff = current_time - 3600
+                self.usage_history[rt] = [
+                    (ts, usage) for ts, usage in self.usage_history[rt]
+                    if ts >= cutoff
+                ]
+
+        # Check limits with more frequent updates for CPU
+        for limit in self.resource_limits:
+            usage = current_usage[limit.resource_type]
+            
+            # More aggressive CPU checking
+            if limit.resource_type == ResourceType.CPU:
+                # Use raw CPU value for immediate response
+                if usage > limit.hard_limit:
+                    # Trigger callbacks immediately for high CPU
+                    for callback in self.action_callbacks[limit.action]:
+                        try:
+                            callback({
+                                "resource_type": limit.resource_type,
+                                "usage": usage,
+                                "limit": limit.hard_limit,
+                                "action": limit.action.name
+                            })
+                        except Exception as e:
+                            logging.error(f"Error in action callback: {e}")
+                    continue
+                
+                # For non-critical CPU, use averaged value
+                recent_usage = self.get_usage_history(ResourceType.CPU, minutes=0.05)
+                if recent_usage:
+                    usage = sum(u for _, u in recent_usage) / len(recent_usage)
+            
+            if usage > limit.hard_limit:
+                # Trigger callbacks
+                for callback in self.action_callbacks[limit.action]:
+                    try:
+                        callback({
+                            "resource_type": limit.resource_type,
+                            "usage": usage,
+                            "limit": limit.hard_limit,
+                            "action": limit.action.name
+                        })
+                    except Exception as e:
+                        logging.error(f"Error in action callback: {e}")
+            elif usage > limit.soft_limit:
+                # Trigger warning callbacks
+                for callback in self.action_callbacks[ControlAction.WARN]:
+                    try:
+                        callback({
+                            "resource_type": limit.resource_type,
+                            "usage": usage,
+                            "limit": limit.soft_limit,
+                            "action": ControlAction.WARN.name
+                        })
+                    except Exception as e:
+                        logging.error(f"Error in action callback: {e}")
+
+    def __del__(self):
+        """Cleanup on deletion"""
+        self.stop()
