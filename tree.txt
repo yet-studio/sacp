@@ -1,0 +1,242 @@
+.
+├── demo_project
+├── docs
+│   ├── analytics
+│   │   ├── README.md
+│   │   ├── behavior.md
+│   │   ├── compliance.md
+│   │   ├── risk.md
+│   │   └── trends.md
+│   ├── ecosystem
+│   │   ├── CONTRIBUTING.md
+│   │   └── README.md
+│   ├── examples
+│   ├── guides
+│   │   └── analytics
+│   │       ├── behavior_tutorial.md
+│   │       ├── compliance_tutorial.md
+│   │       ├── getting_started.md
+│   │       ├── risk_tutorial.md
+│   │       └── trends_tutorial.md
+│   ├── implementation
+│   ├── portal
+│   │   ├── docs
+│   │   │   ├── api
+│   │   │   │   ├── client.md
+│   │   │   │   ├── core.md
+│   │   │   │   └── plugin.md
+│   │   │   ├── concepts
+│   │   │   │   ├── behavior-analysis.md
+│   │   │   │   ├── compliance-rules.md
+│   │   │   │   └── safety-properties.md
+│   │   │   ├── getting-started
+│   │   │   │   ├── installation.md
+│   │   │   │   └── quickstart.md
+│   │   │   ├── scale
+│   │   │   │   ├── cicd.md
+│   │   │   │   ├── distributed-validation.md
+│   │   │   │   ├── large-codebase.md
+│   │   │   │   └── performance.md
+│   │   │   └── index.md
+│   │   └── mkdocs.yml
+│   └── protocol-spec
+│       └── syntax.md
+├── examples
+│   ├── cicd
+│   │   ├── config
+│   │   │   └── validation-pipeline.yml
+│   │   ├── github
+│   │   │   └── sacp-validation.yml
+│   │   └── gitlab
+│   ├── integration
+│   │   └── vscode
+│   │       └── extension.js
+│   └── plugins
+│       ├── behavior_monitor
+│       │   ├── plugin.py
+│       │   └── plugin.yaml
+│       └── safety_checker
+│           ├── plugin.py
+│           └── plugin.yaml
+├── htmlcov
+│   ├── class_index.html
+│   ├── coverage_html_cb_6fb7b396.js
+│   ├── favicon_32_cb_58284776.png
+│   ├── function_index.html
+│   ├── index.html
+│   ├── keybd_closed_cb_ce680311.png
+│   ├── status.json
+│   ├── style_cb_8e611ae1.css
+│   ├── z_0618756b1ff51bca___init___py.html
+│   ├── z_0618756b1ff51bca_access_py.html
+│   ├── z_0618756b1ff51bca_audit_py.html
+│   ├── z_0618756b1ff51bca_behavior_py.html
+│   ├── z_0618756b1ff51bca_config_py.html
+│   ├── z_0618756b1ff51bca_protocol_py.html
+│   ├── z_0632abc6cdee0719_behavior_py.html
+│   ├── z_148c4bdfdd3fd6bf___init___py.html
+│   ├── z_148c4bdfdd3fd6bf_interface_py.html
+│   ├── z_148c4bdfdd3fd6bf_main_py.html
+│   ├── z_3241fe90bbd3663b_static_py.html
+│   ├── z_55c7869fca2c028a_dynamic_py.html
+│   ├── z_62c0453ae12fb941___init___py.html
+│   ├── z_62c0453ae12fb941_database_py.html
+│   ├── z_62c0453ae12fb941_models_py.html
+│   ├── z_65a2770f1d5e9bf4___init___py.html
+│   ├── z_65a2770f1d5e9bf4_exceptions_py.html
+│   ├── z_65a2770f1d5e9bf4_handler_py.html
+│   ├── z_65a2770f1d5e9bf4_recovery_py.html
+│   ├── z_8a5ed0d91013835e___init___py.html
+│   ├── z_8a5ed0d91013835e_rules_py.html
+│   ├── z_8fb95ef5131afb32_safety_py.html
+│   ├── z_de05559f4338c853___init___py.html
+│   ├── z_de05559f4338c853_progression_tracker_py.html
+│   ├── z_de05559f4338c853_pytest_metrics_py.html
+│   ├── z_de05559f4338c853_test_metrics_py.html
+│   ├── z_f0aa5ce23fd0a021___init___py.html
+│   ├── z_f0aa5ce23fd0a021_constraints_py.html
+│   ├── z_f0aa5ce23fd0a021_emergency_py.html
+│   ├── z_f0aa5ce23fd0a021_monitor_py.html
+│   ├── z_f0aa5ce23fd0a021_validator_py.html
+│   ├── z_f4aeaef6978b2030___init___py.html
+│   ├── z_f4aeaef6978b2030_alerts_py.html
+│   ├── z_f4aeaef6978b2030_health_py.html
+│   ├── z_f4aeaef6978b2030_metrics_py.html
+│   └── z_f4aeaef6978b2030_performance_py.html
+├── src
+│   ├── analyzers
+│   │   └── static.py
+│   ├── cli
+│   │   ├── __init__.py
+│   │   ├── interface.py
+│   │   └── main.py
+│   ├── constraints
+│   │   └── behavior.py
+│   ├── control
+│   │   ├── dynamic.py
+│   │   ├── monitor.py
+│   │   └── snapshot.py
+│   ├── core
+│   │   ├── error
+│   │   │   ├── __init__.py
+│   │   │   ├── exceptions.py
+│   │   │   ├── handler.py
+│   │   │   └── recovery.py
+│   │   ├── monitoring
+│   │   │   ├── __init__.py
+│   │   │   ├── alerts.py
+│   │   │   ├── health.py
+│   │   │   ├── metrics.py
+│   │   │   └── performance.py
+│   │   ├── persistence
+│   │   │   ├── __init__.py
+│   │   │   ├── database.py
+│   │   │   └── models.py
+│   │   ├── safety
+│   │   │   ├── __init__.py
+│   │   │   ├── constraints.py
+│   │   │   ├── emergency.py
+│   │   │   ├── monitor.py
+│   │   │   └── validator.py
+│   │   ├── __init__.py
+│   │   ├── access.py
+│   │   ├── audit.py
+│   │   ├── behavior.py
+│   │   ├── config.py
+│   │   └── protocol.py
+│   ├── ecosystem
+│   │   └── plugin.py
+│   ├── enterprise
+│   │   ├── analytics
+│   │   │   ├── examples
+│   │   │   │   ├── README.md
+│   │   │   │   ├── generate_demo_data.py
+│   │   │   │   └── run_demo_dashboard.py
+│   │   │   ├── __init__.py
+│   │   │   ├── behavior.py
+│   │   │   ├── compliance.py
+│   │   │   ├── risk.py
+│   │   │   └── trends.py
+│   │   ├── tenancy
+│   │   │   ├── __init__.py
+│   │   │   ├── customization.py
+│   │   │   ├── isolation.py
+│   │   │   ├── policies.py
+│   │   │   └── tenant.py
+│   │   ├── access.py
+│   │   ├── policies.py
+│   │   ├── reporting.py
+│   │   └── teams.py
+│   ├── ide
+│   │   ├── jetbrains
+│   │   │   ├── src
+│   │   │   │   └── main
+│   │   │   │       ├── kotlin
+│   │   │   │       │   └── com
+│   │   │   │       │       └── sacp
+│   │   │   │       │           └── jetbrains
+│   │   │   │       │               ├── actions
+│   │   │   │       │               │   └── VerificationActions.kt
+│   │   │   │       │               ├── inspections
+│   │   │   │       │               │   └── SACPInspection.kt
+│   │   │   │       │               ├── services
+│   │   │   │       │               │   └── SACPService.kt
+│   │   │   │       │               ├── ui
+│   │   │   │       │               │   └── SACPToolWindow.kt
+│   │   │   │       │               └── SACPServerSupportProvider.kt
+│   │   │   │       └── resources
+│   │   │   │           └── META-INF
+│   │   │   │               └── plugin.xml
+│   │   │   └── build.gradle.kts
+│   │   ├── vscode
+│   │   │   ├── extension.ts
+│   │   │   ├── package.json
+│   │   │   └── tsconfig.json
+│   │   └── lsp_server.py
+│   ├── interfaces
+│   ├── scale
+│   │   ├── cicd.py
+│   │   ├── distributed.py
+│   │   ├── large_codebase.py
+│   │   └── optimization.py
+│   ├── tools
+│   │   ├── __init__.py
+│   │   ├── progression_tracker.py
+│   │   ├── pytest_metrics.py
+│   │   └── test_metrics.py
+│   ├── validators
+│   │   ├── __init__.py
+│   │   └── rules.py
+│   └── verification
+│       └── safety.py
+├── tests
+│   ├── conftest.py
+│   ├── test_access.py
+│   ├── test_audit.py
+│   ├── test_behavior_constraints.py
+│   ├── test_cli.py
+│   ├── test_dynamic_control.py
+│   ├── test_ecosystem.py
+│   ├── test_error.py
+│   ├── test_monitoring.py
+│   ├── test_persistence.py
+│   ├── test_safety_constraints.py
+│   ├── test_safety_verification.py
+│   ├── test_static_analysis.py
+│   ├── test_validators.py
+│   └── utils.py
+├── CODE_OF_CONDUCT.md
+├── GOVERNANCE.md
+├── README.md
+├── ROADMAP.md
+├── SECURITY.md
+├── SUPPORT.md
+├── metrics.json
+├── pytest.ini
+├── requirements-analytics.txt
+├── requirements-dev.txt
+├── requirements.txt
+├── tree.txt
+└── verify_core.py
+
+63 directories, 177 files

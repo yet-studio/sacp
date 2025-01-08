@@ -7,9 +7,10 @@ from .protocol import (
     AccessScope,
     SafetyConstraints,
     ProtocolConfig,
-    SafetyValidator,
     EmergencyStop,
     ProtocolManager
 )
+
+from .safety.validator import SafetyValidator
 
 __version__ = '0.1.0'

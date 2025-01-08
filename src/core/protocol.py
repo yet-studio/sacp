@@ -1,208 +1,210 @@
+#!/usr/bin/env python3
 """
-SafeAI CodeGuard Protocol - Core Protocol Implementation
-Defines the fundamental safety constraints and validation rules for AI code interactions.
+SACP Core Protocol Module
+Defines the core safety and communication protocols for the system
 """
 
-from enum import Enum, auto, IntEnum
-from typing import List, Dict, Optional
+from enum import Enum, IntEnum
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
-from datetime import datetime
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class SafetyLevel(IntEnum):
-    """Defines the safety levels for AI code interactions"""
-    READ_ONLY = 1      # AI can only read and analyze code
-    SUGGEST_ONLY = 2   # AI can suggest changes but cannot modify
-    CONTROLLED = 3     # AI can modify with strict validation
-    FULL_ACCESS = 4    # Advanced mode with comprehensive logging
-
-    def __lt__(self, other):
-        if not isinstance(other, SafetyLevel):
-            return NotImplemented
-        return self.value < other.value
-
-    def __le__(self, other):
-        if not isinstance(other, SafetyLevel):
-            return NotImplemented
-        return self.value <= other.value
-
-    def __gt__(self, other):
-        if not isinstance(other, SafetyLevel):
-            return NotImplemented
-        return self.value > other.value
-
-    def __ge__(self, other):
-        if not isinstance(other, SafetyLevel):
-            return NotImplemented
-        return self.value >= other.value
-
-
-class ComplianceLevel(IntEnum):
-    """Compliance levels for safety verification"""
-    BASIC = 1
-    STANDARD = 2
-    STRICT = 3
-
+class SafetyLevel(Enum):
+    """Safety levels for protocol operations"""
+    READ_ONLY = "READ_ONLY"
+    RESTRICTED = "RESTRICTED"
+    FULL_ACCESS = "FULL_ACCESS"
 
 class AccessScope(IntEnum):
-    """Defines the scope of access for AI operations"""
-    SINGLE_FILE = 1    # Limited to one file
-    DIRECTORY = 2      # Limited to specific directory
-    PROJECT = 3        # Full project access
-    WORKSPACE = 4      # Multiple project access
+    """Access scope levels for protocol operations"""
+    NONE = 0
+    FILE = 1
+    PROJECT = 2
+    WORKSPACE = 3
+    SYSTEM = 4
 
     def __lt__(self, other):
         if not isinstance(other, AccessScope):
             return NotImplemented
-        return self.value < other.value
+        return int(self) < int(other)
 
     def __le__(self, other):
         if not isinstance(other, AccessScope):
             return NotImplemented
-        return self.value <= other.value
+        return int(self) <= int(other)
 
     def __gt__(self, other):
         if not isinstance(other, AccessScope):
             return NotImplemented
-        return self.value > other.value
+        return int(self) > int(other)
 
     def __ge__(self, other):
         if not isinstance(other, AccessScope):
             return NotImplemented
-        return self.value >= other.value
-
-
-class RiskLevel(IntEnum):
-    """Risk levels for operations"""
-    LOW = 1
-    MODERATE = 2
-    HIGH = 3
-    CRITICAL = 4
-
-    def __lt__(self, other):
-        if not isinstance(other, RiskLevel):
-            return NotImplemented
-        return self.value < other.value
-
-    def __le__(self, other):
-        if not isinstance(other, RiskLevel):
-            return NotImplemented
-        return self.value <= other.value
-
-    def __gt__(self, other):
-        if not isinstance(other, RiskLevel):
-            return NotImplemented
-        return self.value > other.value
-
-    def __ge__(self, other):
-        if not isinstance(other, RiskLevel):
-            return NotImplemented
-        return self.value >= other.value
-
-
-@dataclass
-class SafetyConstraints:
-    """Defines the safety constraints for AI operations"""
-    max_file_size: int = 1024 * 1024  # 1MB
-    max_changes_per_session: int = 50
-    restricted_patterns: List[str] = None
-    allowed_file_types: List[str] = None
-    require_human_review: bool = True
-
+        return int(self) >= int(other)
 
 @dataclass
 class ProtocolConfig:
-    """Main configuration for the SACP protocol"""
-    safety_level: SafetyLevel
-    access_scope: AccessScope
-    compliance_level: ComplianceLevel
-    constraints: SafetyConstraints
-    session_id: str
-    created_at: datetime
-    modified_at: datetime
-    owner: str
+    """Configuration for protocol behavior"""
+    max_retries: int = 3
+    timeout_seconds: int = 30
+    validate_all: bool = True
 
-
-class SafetyValidator:
-    """Validates operations against safety constraints"""
+@dataclass
+class SafetyConstraints:
+    """Safety constraints for protocol operations"""
+    max_file_size: int = 1024 * 1024  # 1MB default
+    allowed_extensions: set = None
+    restricted_paths: set = None
     
-    def __init__(self, config: ProtocolConfig):
-        self.config = config
-        self.violation_count = 0
-        self.last_check = None
-
-    def validate_operation(self, operation: Dict) -> bool:
-        """
-        Validates if an operation is safe to execute
-        Returns True if operation is safe, False otherwise
-        """
-        self.last_check = datetime.now()
-        
-        # Basic safety checks
-        if self.config.safety_level == SafetyLevel.READ_ONLY:
-            return operation.get('type') == 'read'
-            
-        if self.config.safety_level == SafetyLevel.SUGGEST_ONLY:
-            return operation.get('type') in ['read', 'suggest']
-        
-        # More detailed validation for CONTROLLED and FULL_ACCESS
-        return self._validate_detailed(operation)
-
-    def _validate_detailed(self, operation: Dict) -> bool:
-        """Detailed validation for higher access levels"""
-        # Implement detailed validation logic here
-        return True  # Placeholder
-
+    def __post_init__(self):
+        if self.allowed_extensions is None:
+            self.allowed_extensions = {'.py', '.txt', '.md'}
+        if self.restricted_paths is None:
+            self.restricted_paths = {'/etc', '/usr', '/var'}
 
 class EmergencyStop:
-    """Emergency stop mechanism for immediate halt of AI operations"""
-    
+    """Emergency stop mechanism for critical operations"""
     def __init__(self):
-        self.active = False
-        self.triggered_at = None
-        self.reason = None
+        self._active = False
+        self._reason = None
+        logger.info("Emergency stop mechanism initialized")
 
-    def trigger(self, reason: str):
-        """Triggers emergency stop"""
-        self.active = True
-        self.triggered_at = datetime.now()
-        self.reason = reason
+    @property
+    def is_active(self) -> bool:
+        return self._active
 
-    def reset(self):
-        """Resets emergency stop state"""
-        self.active = False
-        self.triggered_at = None
-        self.reason = None
+    def activate(self, reason: str = None) -> None:
+        self._active = True
+        self._reason = reason
+        logger.warning(f"Emergency stop activated: {reason}")
 
+    def deactivate(self) -> None:
+        self._active = False
+        self._reason = None
+        logger.info("Emergency stop deactivated")
 
-class ProtocolManager:
-    """Main manager class for the SACP protocol"""
+    def get_status(self) -> Dict[str, Any]:
+        return {
+            "active": self._active,
+            "reason": self._reason
+        }
+
+class SafetyProtocol:
+    """Core protocol implementation for safety-critical operations"""
     
-    def __init__(self, config: ProtocolConfig):
-        self.config = config
-        self.validator = SafetyValidator(config)
-        self.emergency_stop = EmergencyStop()
-        self.audit_log = []
+    def __init__(self, safety_level: str = "READ_ONLY", config: Optional[ProtocolConfig] = None):
+        self.safety_level = SafetyLevel(safety_level)
+        self.config = config or ProtocolConfig()
+        self._operation_history: List[Dict[str, Any]] = []
+        logger.info(f"Initialized SafetyProtocol with level: {safety_level}")
 
-    def execute_operation(self, operation: Dict) -> bool:
+    def validate_change(self, change: Dict[str, Any]) -> bool:
         """
-        Executes an operation if it passes safety validation
-        Returns True if operation was executed, False otherwise
+        Validate if a change is allowed under current safety level
+        
+        Args:
+            change: Dictionary containing change details
+                   Required keys: 'type', 'file'
+        Returns:
+            bool: True if change is allowed, False otherwise
         """
-        if self.emergency_stop.active:
+        try:
+            operation_type = change.get("type", "")
+            
+            if self.safety_level == SafetyLevel.READ_ONLY:
+                return operation_type == "read"
+                
+            if self.safety_level == SafetyLevel.RESTRICTED:
+                return operation_type in ["read", "log"]
+                
+            # FULL_ACCESS level
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error validating change: {str(e)}")
             return False
 
-        if self.validator.validate_operation(operation):
-            self._log_operation(operation)
+    def log_change(self, change: Dict[str, Any]) -> bool:
+        """
+        Log a change attempt to operation history
+        
+        Args:
+            change: Dictionary containing change details
+        Returns:
+            bool: True if logging successful, False otherwise
+        """
+        try:
+            self._operation_history.append({
+                "change": change,
+                "safety_level": self.safety_level.value,
+                "validated": self.validate_change(change)
+            })
+            logger.info(f"Logged change: {change}")
             return True
-        return False
+            
+        except Exception as e:
+            logger.error(f"Error logging change: {str(e)}")
+            return False
 
-    def _log_operation(self, operation: Dict):
-        """Logs operation for audit trail"""
-        log_entry = {
-            'timestamp': datetime.now(),
-            'operation': operation,
-            'safety_level': self.config.safety_level,
-            'session_id': self.config.session_id
-        }
-        self.audit_log.append(log_entry)
+    def get_history(self) -> List[Dict[str, Any]]:
+        """Return operation history"""
+        return self._operation_history
+
+    def reset_history(self) -> None:
+        """Clear operation history"""
+        self._operation_history = []
+        logger.info("Operation history cleared")
+
+class ProtocolManager:
+    """Manager class for handling protocol operations and safety measures"""
+    def __init__(self, config: Optional[ProtocolConfig] = None):
+        self.config = config or ProtocolConfig()
+        self.safety_protocol = SafetyProtocol(safety_level="RESTRICTED", config=self.config)
+        self.emergency_stop = EmergencyStop()
+        self._active_protocols: Dict[str, Any] = {}
+        logger.info("Protocol Manager initialized")
+
+    def register_protocol(self, name: str, protocol: Any) -> bool:
+        """Register a new protocol"""
+        try:
+            if name in self._active_protocols:
+                logger.warning(f"Protocol {name} already registered")
+                return False
+            self._active_protocols[name] = protocol
+            logger.info(f"Protocol {name} registered successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error registering protocol {name}: {str(e)}")
+            return False
+
+    def unregister_protocol(self, name: str) -> bool:
+        """Unregister a protocol"""
+        try:
+            if name not in self._active_protocols:
+                logger.warning(f"Protocol {name} not found")
+                return False
+            del self._active_protocols[name]
+            logger.info(f"Protocol {name} unregistered successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error unregistering protocol {name}: {str(e)}")
+            return False
+
+    def get_protocol(self, name: str) -> Optional[Any]:
+        """Get a registered protocol by name"""
+        return self._active_protocols.get(name)
+
+    def list_protocols(self) -> List[str]:
+        """List all registered protocols"""
+        return list(self._active_protocols.keys())
+
+    def emergency_shutdown(self, reason: str = "Emergency shutdown initiated") -> None:
+        """Initiate emergency shutdown of all protocols"""
+        self.emergency_stop.activate(reason)
+        logger.critical(f"Emergency shutdown initiated: {reason}")
+        # Additional shutdown logic can be added here

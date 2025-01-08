@@ -1,148 +1,95 @@
+#!/usr/bin/env python3
 """
-SafeAI CodeGuard Protocol - Safety Validator
-Validates operations against safety constraints.
+SACP Safety Validator Module
+Implements validation rules and safety checks for the protocol
 """
 
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
-from datetime import datetime
-import asyncio
+from typing import Dict, Any, Optional, NamedTuple
+from dataclasses import dataclass
 import logging
 
-from .constraints import (
-    SafetyConstraint,
-    ResourceConstraint,
-    OperationConstraint,
-    AccessConstraint,
-    ResourceError,
-    OperationError,
-    AccessError
-)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+class ValidationResult(NamedTuple):
+    """Result of a validation check"""
+    valid: bool
+    message: Optional[str] = None
 
 @dataclass
-class ValidationResult:
-    """Result of a safety validation"""
-    valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    context: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.now)
-
+class ValidationConfig:
+    """Configuration for validation rules"""
+    max_file_size: int = 1024 * 1024  # 1MB
+    allowed_extensions: set = None
+    restricted_paths: set = None
 
 class SafetyValidator:
-    """Validates operations against multiple safety constraints"""
+    """Implements safety validation rules"""
     
-    def __init__(self):
-        self.constraints: List[SafetyConstraint] = []
-        self.logger = logging.getLogger(__name__)
-        self.validation_history = []
-    
-    def add_constraint(self, constraint: SafetyConstraint) -> None:
-        """Adds a safety constraint"""
-        self.constraints.append(constraint)
-    
-    def remove_constraint(self, constraint: SafetyConstraint) -> None:
-        """Removes a safety constraint"""
-        self.constraints.remove(constraint)
-    
-    async def validate(self, context: Dict[str, Any]) -> ValidationResult:
-        """Validates context against all constraints"""
-        result = ValidationResult(valid=True)
+    def __init__(self, config: Optional[ValidationConfig] = None):
+        self.config = config or ValidationConfig()
+        self.config.allowed_extensions = self.config.allowed_extensions or {'.py', '.txt', '.md'}
+        self.config.restricted_paths = self.config.restricted_paths or {'/etc', '/usr', '/var'}
+        logger.info("Initialized SafetyValidator")
+
+    def validate(self, context: Dict[str, Any]) -> ValidationResult:
+        """
+        Validate operation context against safety rules
         
+        Args:
+            context: Dictionary containing operation details
+                    Required keys: 'operation', 'file'
+        Returns:
+            ValidationResult: Result of validation with message if invalid
+        """
         try:
-            # Validate each constraint
-            for constraint in self.constraints:
-                try:
-                    # Run validation in thread pool for CPU-bound constraints
-                    is_valid = await asyncio.get_event_loop().run_in_executor(
-                        None, constraint.validate, context
-                    )
-                    
-                    if not is_valid:
-                        result.valid = False
-                        result.errors.append(
-                            f"Constraint {constraint.__class__.__name__} failed"
-                        )
-                
-                except Exception as e:
-                    result.valid = False
-                    result.errors.append(str(e))
-                    self.logger.error(
-                        f"Constraint validation error: {e}",
-                        exc_info=True
-                    )
-            
-            # Record validation
-            self.validation_history.append(result)
-            
-            # Trim history
-            if len(self.validation_history) > 1000:
-                self.validation_history = self.validation_history[-1000:]
-            
-            return result
-        
+            # Basic validation
+            if not self._validate_basic(context):
+                return ValidationResult(False, "Failed basic validation")
+
+            # File validation
+            if not self._validate_file(context):
+                return ValidationResult(False, "Failed file validation")
+
+            # Operation validation
+            if not self._validate_operation(context):
+                return ValidationResult(False, "Failed operation validation")
+
+            return ValidationResult(True)
+
         except Exception as e:
-            self.logger.error(
-                f"Validation error: {e}",
-                exc_info=True
-            )
-            result.valid = False
-            result.errors.append(f"Validation error: {str(e)}")
-            return result
-    
-    async def enforce(self, context: Dict[str, Any]) -> None:
-        """Enforces all safety constraints"""
-        for constraint in self.constraints:
-            try:
-                # Run enforcement in thread pool
-                await asyncio.get_event_loop().run_in_executor(
-                    None, constraint.enforce, context
-                )
+            logger.error(f"Validation error: {str(e)}")
+            return ValidationResult(False, f"Validation error: {str(e)}")
+
+    def _validate_basic(self, context: Dict[str, Any]) -> bool:
+        """Basic context validation"""
+        required_keys = {'operation', 'file'}
+        return all(key in context for key in required_keys)
+
+    def _validate_file(self, context: Dict[str, Any]) -> bool:
+        """Validate file-related constraints"""
+        file_path = context.get('file', '')
+        
+        # Check file extension
+        if not any(file_path.endswith(ext) for ext in self.config.allowed_extensions):
+            logger.warning(f"Invalid file extension: {file_path}")
+            return False
             
-            except (ResourceError, OperationError, AccessError) as e:
-                self.logger.error(
-                    f"Constraint enforcement error: {e}",
-                    exc_info=True
-                )
-                raise
+        # Check restricted paths
+        if any(file_path.startswith(path) for path in self.config.restricted_paths):
+            logger.warning(f"Access to restricted path: {file_path}")
+            return False
             
-            except Exception as e:
-                self.logger.error(
-                    f"Unexpected enforcement error: {e}",
-                    exc_info=True
-                )
-                raise RuntimeError(f"Safety enforcement failed: {str(e)}")
-    
-    def get_validation_stats(self) -> Dict[str, Any]:
-        """Gets validation statistics"""
-        if not self.validation_history:
-            return {}
+        return True
+
+    def _validate_operation(self, context: Dict[str, Any]) -> bool:
+        """Validate operation-specific rules"""
+        operation = context.get('operation', '')
+        allowed_operations = {'read', 'write', 'delete', 'move'}
         
-        total = len(self.validation_history)
-        valid = sum(1 for r in self.validation_history if r.valid)
-        
-        return {
-            'total_validations': total,
-            'successful_validations': valid,
-            'failure_rate': (total - valid) / total if total > 0 else 0,
-            'common_errors': self._get_common_errors(),
-            'last_validation': self.validation_history[-1].timestamp
-        }
-    
-    def _get_common_errors(self) -> Dict[str, int]:
-        """Gets most common validation errors"""
-        error_counts = {}
-        
-        for result in self.validation_history:
-            for error in result.errors:
-                error_counts[error] = error_counts.get(error, 0) + 1
-        
-        # Sort by frequency
-        return dict(
-            sorted(
-                error_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]
-        )
+        if operation not in allowed_operations:
+            logger.warning(f"Invalid operation: {operation}")
+            return False
+            
+        return True
