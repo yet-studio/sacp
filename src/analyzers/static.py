@@ -225,7 +225,7 @@ class StyleAnalyzer:
                     '--disable=all',  # Disable all checks first
                     '--enable=C,R,W,E,F',  # Enable all categories
                     '--msg-template={msg_id}:{line:3d},{column}: {obj}: {msg}'
-                ], reporter=JSONReporter(), do_exit=False)
+                ], reporter=JSONReporter(), exit=False)
                 
                 # Get the output from StringIO
                 output = output_buffer.getvalue()
