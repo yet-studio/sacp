@@ -42,7 +42,6 @@ Thumbs.db
 
 # Temporary output files
 .coverage
-.notes.txt
 git_diff.txt
 gitlog_*.txt
 piplist.txt
