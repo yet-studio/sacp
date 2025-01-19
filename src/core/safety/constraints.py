@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import re
 import psutil
 import z3
-
+import logging
 
 class SafetyConstraint(ABC):
     """Base class for all safety constraints"""
@@ -24,7 +24,6 @@ class SafetyConstraint(ABC):
     def enforce(self, context: Dict[str, Any]) -> None:
         """Enforces safety constraints on operation"""
         pass
-
 
 @dataclass
 class ResourceConstraint(SafetyConstraint):
@@ -97,7 +96,6 @@ class ResourceConstraint(SafetyConstraint):
             else:
                 msg = "Resource constraint violated"
             raise ResourceError(msg)
-
 
 @dataclass
 class OperationConstraint(SafetyConstraint):
@@ -204,7 +202,6 @@ class OperationConstraint(SafetyConstraint):
         
         return 1.0  # Maximum impact if cannot determine
 
-
 @dataclass
 class AccessConstraint(SafetyConstraint):
     """Enforces access control constraints"""
@@ -212,36 +209,39 @@ class AccessConstraint(SafetyConstraint):
     restricted_paths: Set[str]
     required_permissions: Dict[str, Set[str]]
     max_scope: str = 'directory'
-    
+
     def validate(self, context: Dict[str, Any]) -> bool:
         """Validates access control"""
         operation = context['operation']
         user = context.get('user', {})
-        
+
+        logging.debug(f"Validating access control for operation: {operation}")
+        logging.debug(f"User context: {user}")
+
         # Check path restrictions
         path = operation.get('file_path', '')
-        
+
         # Deny if path is restricted
         if any(path.startswith(r) for r in self.restricted_paths):
             return False
-        
+
         # Allow only if path is in allowed paths
         if not any(path.startswith(a) for a in self.allowed_paths):
             return False
-        
+
         # Check permissions
         required = self.required_permissions.get(operation['type'], set())
         if not required.issubset(user.get('permissions', set())):
             return False
-        
+
         # Check scope
         if self.max_scope == 'file' and '/' in path:
             return False
         if self.max_scope == 'directory' and '../' in path:
             return False
-        
+
         return True
-    
+
     def enforce(self, context: Dict[str, Any]) -> None:
         """Enforces access constraints"""
         if not self.validate(context):
@@ -249,16 +249,13 @@ class AccessConstraint(SafetyConstraint):
                 "Operation violates access constraints"
             )
 
-
 class ResourceError(Exception):
     """Raised when resource constraints are violated"""
     pass
 
-
 class OperationError(Exception):
     """Raised when operation constraints are violated"""
     pass
-
 
 class AccessError(Exception):
     """Raised when access constraints are violated"""
