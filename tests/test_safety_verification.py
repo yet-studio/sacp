@@ -144,6 +144,39 @@ def process_data(data: str) -> str:
         self.assertIn("no_shell_injection", violation_rules)
         self.assertIn("no_hardcoded_secrets", violation_rules)
 
+    def test_critical_violations(self):
+        """Test detection of critical safety violations"""
+        # Create test file with critical violations
+        code = """
+def process_data(data: str) -> str:
+    # Critical: Arbitrary code execution
+    exec(data)
+    
+    # Critical: System command injection
+    os.system(data)
+    
+    # Critical: File system access
+    with open('/etc/passwd', 'r') as f:
+        content = f.read()
+    
+    return content
+"""
+        
+        file_path = self.create_test_file(code)
+        
+        checker = ComplianceChecker(ComplianceLevel.STRICT)
+        result = checker.check_compliance(file_path)
+        
+        self.assertFalse(result.success)
+        self.assertEqual(result.verification_type, VerificationType.COMPLIANCE)
+        
+        violations = result.details.get("violations", [])
+        violation_rules = {v["rule"] for v in violations}
+        
+        # Check that critical violations are detected
+        self.assertIn("no_eval_exec", violation_rules)
+        self.assertIn("no_shell_injection", violation_rules)
+
     @unittest.skip("Temporarily disabled - Test automation needs fixing")
     def test_test_automation(self):
         # Create test directory
