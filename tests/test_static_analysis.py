@@ -18,19 +18,27 @@ from src.analyzers.static import (
 
 class TestStaticAnalysis(unittest.TestCase):
     def setUp(self):
+        """Set up test environment"""
+        import tempfile
+        import os
         self.temp_dir = tempfile.mkdtemp()
+        # Ensure the directory exists
+        os.makedirs(self.temp_dir, exist_ok=True)
         self.engine = StaticAnalysisEngine()
 
     def tearDown(self):
+        """Clean up test environment"""
         import shutil
-        shutil.rmtree(self.temp_dir)
+        import os
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def create_test_file(self, content: str) -> str:
         """Create a test file with the given content"""
         import os
         file_path = os.path.join(self.temp_dir, "test.py")
         with open(file_path, 'w') as f:
-            f.write(content)
+            f.write(content.strip())
         return file_path
 
     @unittest.skip("Temporarily disabled - Security analysis needs fixing")
@@ -54,6 +62,7 @@ class TestStaticAnalysis(unittest.TestCase):
 
     @unittest.skip("Temporarily disabled - Style analysis needs fixing")
     def test_style_analysis(self):
+        """Test style analysis functionality"""
         # Create test file with style issues
         code = """
 def badFunction():

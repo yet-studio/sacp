@@ -192,11 +192,18 @@ class StyleAnalyzer:
     
     def analyze_file(self, file_path: str) -> List[AnalysisResult]:
         """Analyze a file for style issues"""
+        import os
+        import sys
+        import json
+        import logging
+        from io import StringIO
+        from pylint.lint import Run
+        from pylint.reporters.json_reporter import JSONReporter
+
         results = []
         
         try:
             # Check if file exists and is readable
-            import os
             if not os.path.isfile(file_path):
                 logging.error(f"File not found: {file_path}")
                 return results
@@ -205,38 +212,41 @@ class StyleAnalyzer:
                 logging.error(f"File not readable: {file_path}")
                 return results
             
-            # Capture pylint output using StringIO
-            import sys
-            from io import StringIO
-            
             # Capture stdout to prevent pylint from printing to console
             output_buffer = StringIO()
             old_stdout = sys.stdout
             sys.stdout = output_buffer
             
             try:
-                # Run pylint with JSON reporter
-                Run([str(file_path), '--output-format=json'], reporter=JSONReporter(), exit=False)
+                # Run pylint with JSON reporter and specific options
+                Run([
+                    str(file_path),
+                    '--output-format=json',
+                    '--disable=all',  # Disable all checks first
+                    '--enable=C,R,W,E,F',  # Enable all categories
+                    '--msg-template={msg_id}:{line:3d},{column}: {obj}: {msg}'
+                ], reporter=JSONReporter(), do_exit=False)
                 
                 # Get the output from StringIO
                 output = output_buffer.getvalue()
                 
                 try:
                     # Parse JSON output directly from the string
-                    import json
-                    messages = json.loads(output)
-                    for message in messages:
-                        results.append(AnalysisResult(
-                            analysis_type=AnalysisType.STYLE_CHECK,
-                            severity=self._convert_severity(message['type']),
-                            file_path=file_path,
-                            line_number=message['line'],
-                            message=message['message'],
-                            code=message['message-id'],
-                            metadata={'symbol': message['symbol']}
-                        ))
+                    if output.strip():
+                        messages = json.loads(output)
+                        for message in messages:
+                            results.append(AnalysisResult(
+                                analysis_type=AnalysisType.STYLE_CHECK,
+                                severity=self._convert_severity(message.get('type', 'warning')),
+                                file_path=file_path,
+                                line_number=message.get('line', 0),
+                                message=message.get('message', ''),
+                                code=message.get('message-id', ''),
+                                metadata={'symbol': message.get('symbol', '')}
+                            ))
                 except json.JSONDecodeError as je:
                     logging.error(f"Error parsing pylint output for {file_path}: {je}")
+                    logging.debug(f"Raw output: {output}")
                 
             finally:
                 # Restore stdout
@@ -244,6 +254,8 @@ class StyleAnalyzer:
                 
         except Exception as e:
             logging.error(f"Error style checking {file_path}: {str(e)}")
+            import traceback
+            logging.debug(f"Traceback: {traceback.format_exc()}")
         
         return results
 
