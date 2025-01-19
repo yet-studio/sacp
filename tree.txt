@@ -103,6 +103,12 @@
 │   ├── z_f4aeaef6978b2030_health_py.html
 │   ├── z_f4aeaef6978b2030_metrics_py.html
 │   └── z_f4aeaef6978b2030_performance_py.html
+├── sacp.egg-info
+│   ├── PKG-INFO
+│   ├── SOURCES.txt
+│   ├── dependency_links.txt
+│   ├── requires.txt
+│   └── top_level.txt
 ├── src
 │   ├── analyzers
 │   │   └── static.py
@@ -207,14 +213,16 @@
 │   ├── validators
 │   │   ├── __init__.py
 │   │   └── rules.py
-│   └── verification
-│       └── safety.py
+│   ├── verification
+│   │   └── safety.py
+│   └── __init__.py
 ├── tests
 │   ├── conftest.py
 │   ├── test_access.py
 │   ├── test_audit.py
 │   ├── test_behavior_constraints.py
 │   ├── test_cli.py
+│   ├── test_dependency_analyzer.py
 │   ├── test_dynamic_control.py
 │   ├── test_ecosystem.py
 │   ├── test_error.py
@@ -231,12 +239,20 @@
 ├── ROADMAP.md
 ├── SECURITY.md
 ├── SUPPORT.md
+├── git_diff.txt
+├── gitlog_one-line.txt
+├── gitlog_output.txt
 ├── metrics.json
+├── piplist.txt
 ├── pytest.ini
+├── pytest_output.txt
+├── pytest_output_last.txt
+├── pytest_output_new.txt
 ├── requirements-analytics.txt
 ├── requirements-dev.txt
-├── requirements.txt
+├── setup.py
+├── test-dependency-analyzer_output.txt
 ├── tree.txt
 └── verify_core.py
 
-63 directories, 177 files
+64 directories, 192 files
