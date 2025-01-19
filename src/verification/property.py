@@ -6,13 +6,14 @@ import ast
 import re
 import logging
 from typing import List, Dict, Any
+import textwrap
 from .safety import SafetyProperty, VerificationResult, VerificationType
 
 class PropertyValidator:
-    """Validates safety properties in Python code"""
+    """Validates safety properties in code"""
     
     def __init__(self):
-        self.ast_cache = {}
+        self.validated_properties: Dict[str, bool] = {}
 
     def validate_properties(self, file_path: str, properties: List[SafetyProperty]) -> VerificationResult:
         """Validate safety properties in a Python file"""
@@ -20,6 +21,8 @@ class PropertyValidator:
             # Read and parse the file
             with open(file_path, 'r') as f:
                 code = f.read()
+                # Clean up indentation
+                code = textwrap.dedent(code)
                 tree = ast.parse(code)
             
             violations = []
@@ -38,7 +41,7 @@ class PropertyValidator:
             success = len(violations) == 0
             return VerificationResult(
                 success=success,
-                verification_type=VerificationType.STATIC,
+                verification_type=VerificationType.PROPERTY,
                 message="All properties satisfied" if success else "Property violations detected",
                 details={"violations": violations} if violations else {}
             )
@@ -47,7 +50,7 @@ class PropertyValidator:
             logging.error(f"Error during property validation: {str(e)}")
             return VerificationResult(
                 success=False,
-                verification_type=VerificationType.STATIC,
+                verification_type=VerificationType.PROPERTY,
                 message=f"Validation failed: {str(e)}",
                 details={"error": str(e)}
             )

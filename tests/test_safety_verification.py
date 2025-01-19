@@ -75,17 +75,16 @@ class TestSafetyVerification(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.verification_type, VerificationType.FORMAL)
 
-    @unittest.skip("Temporarily disabled - Property validation needs fixing")
     def test_property_validation(self):
         """Test property validation functionality"""
         # Create test file with potential violations
         code = """
-        def process_data(data: str) -> str:
-            # Missing input validation
-            return eval(data)  # Unsafe eval
-        
-        password = "hardcoded123"  # Unsafe assignment
-        """
+def process_data(data: str) -> str:
+    # Missing input validation
+    return eval(data)  # Unsafe eval
+
+password = "hardcoded123"  # Unsafe assignment
+"""
         
         file_path = self.create_test_file(code)
         
