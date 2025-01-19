@@ -5,14 +5,21 @@ Tests for the SACP safety verification system
 import unittest
 import pytest
 import logging
+import tempfile
+import os
 from datetime import datetime
 from pathlib import Path
-import tempfile
+from typing import List, Dict, Any, Optional
+
 from src.verification.safety import (
     SafetyVerification,
     ComplianceLevel,
     VerificationType,
-    SafetyProperty
+    SafetyProperty,
+    ComplianceChecker,
+    FormalVerifier,
+    PropertyValidator,
+    TestAutomator
 )
 from src.verification.property import PropertyValidator
 
@@ -104,7 +111,6 @@ password = "hardcoded123"  # Unsafe assignment
         self.assertFalse(result.success)  # Should fail due to eval() usage
         self.assertTrue(any("eval" in str(v).lower() for v in result.details.get("violations", [])))
 
-    @unittest.skip("Temporarily disabled - Missing imports")
     def test_compliance_checking(self):
         """Test compliance checking functionality"""
         # Create test file with compliance violations
