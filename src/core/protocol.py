@@ -10,14 +10,25 @@ from dataclasses import dataclass
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class SafetyLevel(Enum):
     """Safety levels for protocol operations"""
     READ_ONLY = "READ_ONLY"
+    SUGGEST_ONLY = "SUGGEST_ONLY"
+    CONTROLLED = "CONTROLLED"
     RESTRICTED = "RESTRICTED"
     FULL_ACCESS = "FULL_ACCESS"
+
+class ComplianceLevel(Enum):
+    """Compliance levels for protocol operations"""
+    LOW = "LOW"         # Minimal compliance checks
+    MEDIUM = "MEDIUM"   # Moderate compliance checks
+    HIGH = "HIGH"       # Strict compliance checks
+    FULL = "FULL"       # Full compliance with all checks
+    STANDARD = "STANDARD"  # Standard compliance checks
+    STRICT = "STRICT"
 
 class AccessScope(IntEnum):
     """Access scope levels for protocol operations"""
