@@ -104,13 +104,38 @@ password = "hardcoded123"  # Unsafe assignment
         self.assertFalse(result.success)  # Should fail due to eval() usage
         self.assertTrue(any("eval" in str(v).lower() for v in result.details.get("violations", [])))
 
-    @unittest.skip("Temporarily skipping this test due to errors")
     def test_compliance_checking(self):
-        pass
-
-    @unittest.skip("Temporarily skipping this test due to errors")
-    def test_critical_violations(self):
-        pass
+        """Test compliance checking functionality"""
+        # Create test file with compliance violations
+        code = """
+def process_data(data: str) -> str:
+    # Unsafe use of eval
+    result = eval(data)
+    
+    # Unsafe shell command
+    os.system('ls')
+    
+    # Hardcoded secret
+    api_key = "secret123"
+    
+    return result
+"""
+        
+        file_path = self.create_test_file(code)
+        
+        checker = ComplianceChecker(ComplianceLevel.STANDARD)
+        result = checker.check_compliance(file_path)
+        
+        self.assertFalse(result.success)
+        self.assertEqual(result.verification_type, VerificationType.COMPLIANCE)
+        
+        violations = result.details.get("violations", [])
+        violation_rules = {v["rule"] for v in violations}
+        
+        # Check that all expected violations are detected
+        self.assertIn("no_eval_exec", violation_rules)
+        self.assertIn("no_shell_injection", violation_rules)
+        self.assertIn("no_hardcoded_secrets", violation_rules)
 
     @unittest.skip("Temporarily disabled - Test automation needs fixing")
     def test_test_automation(self):
