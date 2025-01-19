@@ -47,22 +47,24 @@ class TestStaticAnalysis(unittest.TestCase):
             f.write(content.strip())
         return file_path
 
-    @unittest.skip("Temporarily disabled - Security analysis needs fixing")
     def test_security_analysis(self):
+        """Test security analysis functionality"""
+        # Create test file with security issues
         code = """
-        import pickle
-        import subprocess
-        
-        def unsafe_function():
-            data = pickle.loads(user_input)
-            subprocess.call(user_command, shell=True)
-        """
-        
+import pickle
+import os
+
+def unsafe_function():
+    data = input('Enter data: ')
+    # Unsafe deserialization
+    obj = pickle.loads(data)
+    return obj
+"""
         file_path = self.create_test_file(code)
         analyzer = SecurityAnalyzer()
         results = analyzer.analyze_file(file_path)
-        
-        # Should find pickle and subprocess security issues
+
+        # Should find security issues (like unsafe pickle usage)
         self.assertGreater(len(results), 0)
         self.assertTrue(any('pickle' in r.message.lower() for r in results))
 
