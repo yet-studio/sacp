@@ -199,30 +199,47 @@ class StyleAnalyzer:
             import tempfile
             import json
             import os
+            import sys
+            from io import StringIO
             
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
-                # Run pylint with JSON reporter and redirect output to temp file
-                Run([file_path, f'--output={tmp.name}', '--output-format=json'], reporter=JSONReporter(), exit=False, do_exit=False)
-                
-                # Read the JSON output
-                tmp.seek(0)
-                try:
-                    messages = json.load(tmp)
-                    for message in messages:
-                        results.append(AnalysisResult(
-                            analysis_type=AnalysisType.STYLE_CHECK,
-                            severity=self._convert_severity(message['type']),
-                            file_path=file_path,
-                            line_number=message['line'],
-                            message=message['message'],
-                            code=message['message-id'],
-                            metadata={'symbol': message['symbol']}
-                        ))
-                except json.JSONDecodeError:
-                    logging.error(f"Error parsing pylint output for {file_path}")
-                
-            # Clean up temp file
-            os.unlink(tmp.name)
+            # Capture stdout to prevent pylint from printing to console
+            old_stdout = sys.stdout
+            sys.stdout = StringIO()
+            
+            try:
+                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
+                    # Run pylint with JSON reporter and redirect output to temp file
+                    Run([file_path, '--output-format=json'], reporter=JSONReporter(), exit=False)
+                    
+                    # Get the output from the StringIO
+                    output = sys.stdout.getvalue()
+                    
+                    # Write the output to our temp file
+                    tmp.write(output)
+                    tmp.flush()
+                    
+                    # Read and parse the JSON output
+                    with open(tmp.name, 'r') as f:
+                        try:
+                            messages = json.load(f)
+                            for message in messages:
+                                results.append(AnalysisResult(
+                                    analysis_type=AnalysisType.STYLE_CHECK,
+                                    severity=self._convert_severity(message['type']),
+                                    file_path=file_path,
+                                    line_number=message['line'],
+                                    message=message['message'],
+                                    code=message['message-id'],
+                                    metadata={'symbol': message['symbol']}
+                                ))
+                        except json.JSONDecodeError:
+                            logging.error(f"Error parsing pylint output for {file_path}")
+                    
+                # Clean up temp file
+                os.unlink(tmp.name)
+            finally:
+                # Restore stdout
+                sys.stdout = old_stdout
                 
         except Exception as e:
             logging.error(f"Error style checking {file_path}: {str(e)}")
