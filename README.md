@@ -94,6 +94,21 @@ sacp/
     └── cicd/          # CI/CD Configurations
 ```
 
+## Development Status
+
+### Test Coverage
+- ✅ Critical Safety Violations
+- ✅ Test Automation Framework
+- ✅ Full Verification System
+- 🚧 Compliance Checking
+- 🚧 Dependency Analysis
+- 🚧 Safety Validation
+- 🚧 Security Analysis
+- 🚧 Style Analysis
+
+### Current Focus
+We are actively working on completing the test suite and improving code coverage. See our [NOTES.md](NOTES.md) for detailed progress tracking and [ROADMAP.md](ROADMAP.md) for project timeline.
+
 ## Quick Start
 
 1. Install SACP:
