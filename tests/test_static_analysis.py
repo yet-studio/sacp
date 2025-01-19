@@ -50,19 +50,19 @@ class TestStaticAnalysis(unittest.TestCase):
         self.assertGreater(len(results), 0)
         self.assertTrue(any('pickle' in r.message.lower() for r in results))
 
-    @unittest.skip("Temporarily disabled - Style analysis needs fixing")
     def test_style_analysis(self):
+        # Create test file with style issues
         code = """
-        def badFunction():
-            x=1
-            return      x
-        """
+def badFunction():
+    x=1
+    return      x
+"""
         
         file_path = self.create_test_file(code)
         analyzer = StyleAnalyzer()
         results = analyzer.analyze_file(file_path)
         
-        # Should find style issues
+        # Should find style issues (like bad function name, missing spaces around operator)
         self.assertGreater(len(results), 0)
         self.assertTrue(
             any(r.analysis_type == AnalysisType.STYLE_CHECK for r in results)
