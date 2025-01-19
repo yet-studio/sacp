@@ -177,47 +177,60 @@ def process_data(data: str) -> str:
         self.assertIn("no_eval_exec", violation_rules)
         self.assertIn("no_shell_injection", violation_rules)
 
-    @unittest.skip("Temporarily disabled - Test automation needs fixing")
     def test_test_automation(self):
+        """Test detection of test failures and coverage issues"""
         # Create test directory
         test_dir = Path(self.temp_dir) / "tests"
         test_dir.mkdir()
         
-        # Create test file
+        # Create test file with failing test
         test_file = test_dir / "test_example.py"
         with open(test_file, 'w') as f:
             f.write("""
-            import unittest
-            
-            class TestExample(unittest.TestCase):
-                def test_pass(self):
-                    self.assertTrue(True)
-                    
-                def test_fail(self):
-                    self.assertTrue(False)
-            """)
+import unittest
+
+class TestExample(unittest.TestCase):
+    def test_pass(self):
+        self.assertTrue(True)
+        
+    def test_fail(self):
+        self.assertTrue(False)
+""")
+        
+        # Create source file with low coverage
+        src_dir = Path(self.temp_dir) / "src"
+        src_dir.mkdir()
+        src_file = src_dir / "example.py"
+        with open(src_file, 'w') as f:
+            f.write("""
+def add(a, b):
+    return a + b
+
+def subtract(a, b):
+    return a - b  # Not covered by tests
+""")
         
         automator = TestAutomator()
         result = automator.run_tests(str(test_dir))
         
         self.assertFalse(result.success)
-        self.assertTrue(any(v['type'] == 'test_failure'
-                          for v in result.violations))
+        self.assertEqual(result.verification_type, VerificationType.TEST)
+        self.assertTrue(any(v['type'] == 'test_failure' for v in result.details.get('violations', [])))
 
-    @unittest.skip("Temporarily disabled - Full verification needs fixing")
     def test_full_verification(self):
+        """Test full verification of a small project"""
         # Create a small project
         src_dir = Path(self.temp_dir) / "src"
         src_dir.mkdir()
         
-        # Create source file
+        # Create source file with safety properties
         with open(src_dir / "main.py", 'w') as f:
             f.write("""
-            def process_data(x: int, y: int) -> int:
-                assert x > 0, "x must be positive"
-                assert y > 0, "y must be positive"
-                return x + y
-            """)
+def process_data(x: int, y: int) -> int:
+    assert x > 0, "x must be positive"
+    assert y > 0, "y must be positive"
+    return x + y
+""")
         
         # Create test file
         test_dir = Path(self.temp_dir) / "tests"
@@ -225,13 +238,19 @@ def process_data(data: str) -> str:
         
         with open(test_dir / "test_main.py", 'w') as f:
             f.write("""
-            import unittest
-            
-            class TestMain(unittest.TestCase):
-                def test_process_data(self):
-                    from src.main import process_data
-                    self.assertEqual(process_data(1, 2), 3)
-            """)
+import unittest
+from src.main import process_data
+
+class TestMain(unittest.TestCase):
+    def test_process_data(self):
+        self.assertEqual(process_data(1, 2), 3)
+""")
+        
+        # Create __init__.py files
+        with open(src_dir / "__init__.py", 'w') as f:
+            f.write("")
+        with open(test_dir / "__init__.py", 'w') as f:
+            f.write("")
         
         # Define safety properties
         properties = [
@@ -244,17 +263,18 @@ def process_data(data: str) -> str:
             )
         ]
         
-        # Run full verification
-        results = self.verifier.verify_codebase(
+        verifier = SafetyVerification()
+        results = verifier.verify_codebase(
             self.temp_dir,
             properties
         )
         
         # Check results
+        self.assertTrue(results)  # Results should not be empty
         self.assertTrue(any(r.success for r in results))
         
         # Get summary
-        summary = self.verifier.get_verification_summary()
+        summary = verifier.get_verification_summary()
         self.assertGreater(summary['total_checks'], 0)
         self.assertIn('FORMAL', summary['by_type'])
 
