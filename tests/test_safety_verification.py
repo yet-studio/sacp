@@ -74,8 +74,8 @@ class TestSafetyVerification(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.verification_type, VerificationType.FORMAL)
 
-    @unittest.skip("Temporarily disabled - Property validation needs fixing")
     def test_property_validation(self):
+        """Test property validation functionality"""
         # Create test file with potential violations
         code = """
         def process_data(data: str) -> str:
@@ -100,9 +100,8 @@ class TestSafetyVerification(unittest.TestCase):
         validator = PropertyValidator()
         result = validator.validate_properties(file_path, properties)
         
-        self.assertFalse(result.success)
-        self.assertTrue(any('eval' in v.get('message', '')
-                          for v in result.violations))
+        self.assertFalse(result.success)  # Should fail due to eval() usage
+        self.assertTrue(any("eval" in str(v).lower() for v in result.details.get("violations", [])))
 
     @unittest.skip("Temporarily skipping this test due to errors")
     def test_compliance_checking(self):
