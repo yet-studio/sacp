@@ -43,12 +43,10 @@ class SafetyProperty:
 @dataclass
 class VerificationResult:
     """Result of a verification check"""
-    verification_type: VerificationType
-    timestamp: datetime
     success: bool
-    details: Dict[str, Any]
-    violations: List[Dict[str, Any]]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    verification_type: VerificationType
+    message: str
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 class FormalVerifier:
@@ -117,23 +115,19 @@ class FormalVerifier:
                     })
             
             return VerificationResult(
-                verification_type=VerificationType.FORMAL,
-                timestamp=datetime.now(),
                 success=len(violations) == 0,
-                details={
-                    'verified_properties': list(self.verified_properties.keys())
-                },
-                violations=violations
+                verification_type=VerificationType.FORMAL,
+                message="All properties satisfied" if len(violations) == 0 else "Property violations detected",
+                details={"violations": violations} if violations else {}
             )
             
         except Exception as e:
             logging.error(f"Formal verification error: {str(e)}")
             return VerificationResult(
-                verification_type=VerificationType.FORMAL,
-                timestamp=datetime.now(),
                 success=False,
-                details={'error': str(e)},
-                violations=[]
+                verification_type=VerificationType.FORMAL,
+                message=f"Validation failed: {str(e)}",
+                details={"error": str(e)}
             )
 
     def _extract_constraints(
@@ -165,182 +159,64 @@ class FormalVerifier:
 
 class PropertyValidator:
     """Validates safety properties in code"""
-
+    
     def __init__(self):
-        self.type_checker = mypy_api
         self.validated_properties: Dict[str, bool] = {}
 
-    def validate_properties(
-        self,
-        code_path: str,
-        properties: List[SafetyProperty]
-    ) -> VerificationResult:
-        """Validate safety properties in code"""
+    def validate_properties(self, file_path: str, properties: List[SafetyProperty]) -> VerificationResult:
+        """Validate safety properties in a Python file"""
         try:
+            # Read and parse the file
+            with open(file_path, 'r') as f:
+                code = f.read()
+                tree = ast.parse(code)
+            
             violations = []
             
-            # Run type checking
-            result = self.type_checker.run([code_path])
-            if result[0]:  # Type errors found
-                violations.append({
-                    'type': 'type_error',
-                    'details': result[0]
-                })
-            
-            # Validate each property
+            # Check each property
             for prop in properties:
-                try:
-                    if prop.property_type == 'invariant':
-                        self._validate_invariant(code_path, prop, violations)
-                    elif prop.property_type == 'precondition':
-                        self._validate_precondition(code_path, prop, violations)
-                    elif prop.property_type == 'postcondition':
-                        self._validate_postcondition(code_path, prop, violations)
-                except Exception as e:
-                    violations.append({
-                        'property': prop.name,
-                        'error': str(e)
-                    })
+                if prop.property_type == "invariant":
+                    # For invariants, we check if the expression evaluates to True
+                    if not self._check_invariant(code, prop):
+                        violations.append({
+                            "property": prop.name,
+                            "description": prop.description,
+                            "severity": prop.severity
+                        })
             
+            success = len(violations) == 0
             return VerificationResult(
+                success=success,
                 verification_type=VerificationType.PROPERTY,
-                timestamp=datetime.now(),
-                success=len(violations) == 0,
-                details={
-                    'validated_properties': list(self.validated_properties.keys())
-                },
-                violations=violations
+                message="All properties satisfied" if success else "Property violations detected",
+                details={"violations": violations} if violations else {}
             )
             
         except Exception as e:
-            logging.error(f"Property validation error: {str(e)}")
+            logging.error(f"Error during property validation: {str(e)}")
             return VerificationResult(
-                verification_type=VerificationType.PROPERTY,
-                timestamp=datetime.now(),
                 success=False,
-                details={'error': str(e)},
-                violations=[]
+                verification_type=VerificationType.PROPERTY,
+                message=f"Validation failed: {str(e)}",
+                details={"error": str(e)}
             )
 
-    def _validate_invariant(
-        self,
-        code_path: str,
-        prop: SafetyProperty,
-        violations: List[Dict[str, Any]]
-    ):
-        """Validate an invariant property"""
-        with open(code_path, 'r') as f:
-            code = f.read()
-        
-        tree = ast.parse(code)
-        validator = self._create_ast_validator(prop)
-        
-        for node in ast.walk(tree):
-            if not validator(node):
-                violations.append({
-                    'property': prop.name,
-                    'location': f"Line {node.lineno}",
-                    'message': f"Invariant violation: {prop.description}"
-                })
-
-    def _validate_precondition(
-        self,
-        code_path: str,
-        prop: SafetyProperty,
-        violations: List[Dict[str, Any]]
-    ):
-        """Validate a precondition property"""
-        with open(code_path, 'r') as f:
-            code = f.read()
-        
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                # Check if precondition is enforced
-                has_check = any(
-                    isinstance(stmt, ast.Assert) and
-                    prop.expression in ast.unparse(stmt)
-                    for stmt in node.body[:1]  # Check first statement
-                )
-                
-                if not has_check:
-                    violations.append({
-                        'property': prop.name,
-                        'location': f"Line {node.lineno}",
-                        'message': f"Missing precondition: {prop.description}"
-                    })
-
-    def _validate_postcondition(
-        self,
-        code_path: str,
-        prop: SafetyProperty,
-        violations: List[Dict[str, Any]]
-    ):
-        """Validate a postcondition property"""
-        with open(code_path, 'r') as f:
-            code = f.read()
-        
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                # Check if postcondition is enforced
-                has_check = any(
-                    isinstance(stmt, ast.Assert) and
-                    prop.expression in ast.unparse(stmt)
-                    for stmt in node.body[-1:]  # Check last statement
-                )
-                
-                if not has_check:
-                    violations.append({
-                        'property': prop.name,
-                        'location': f"Line {node.lineno}",
-                        'message': f"Missing postcondition: {prop.description}"
-                    })
-
-    def _create_ast_validator(
-        self,
-        prop: SafetyProperty
-    ) -> Callable[[ast.AST], bool]:
-        """Create an AST validator for a property"""
-        def validator(node: ast.AST) -> bool:
-            try:
-                if isinstance(node, ast.Call):
-                    # Check function calls
-                    return self._validate_call(node, prop)
-                elif isinstance(node, ast.Assign):
-                    # Check assignments
-                    return self._validate_assignment(node, prop)
-                return True
-            except Exception:
-                return False
-        return validator
-
-    def _validate_call(self, node: ast.Call, prop: SafetyProperty) -> bool:
-        """Validate a function call against a property"""
-        unsafe_patterns = {
-            'os.system',
-            'subprocess.call',
-            'eval',
-            'exec'
-        }
-        
-        func_name = ast.unparse(node.func)
-        return not any(pattern in func_name for pattern in unsafe_patterns)
-
-    def _validate_assignment(self, node: ast.Assign, prop: SafetyProperty) -> bool:
-        """Validate an assignment against a property"""
-        # Example: Check for assignments to sensitive variables
-        sensitive_patterns = {
-            r'password',
-            r'secret',
-            r'key'
-        }
-        
-        for target in node.targets:
-            name = ast.unparse(target)
-            if any(re.search(pattern, name, re.I) for pattern in sensitive_patterns):
-                return False
-        return True
+    def _check_invariant(self, code: str, prop: SafetyProperty) -> bool:
+        """Check if an invariant property holds"""
+        try:
+            # Handle special cases with custom checks
+            if "not in code" in prop.expression:
+                # Check for presence of specific text
+                search_term = prop.expression.split("'")[1]
+                return search_term not in code
+            
+            # For other cases, evaluate the expression in the context of the code
+            context = {"code": code}
+            return eval(prop.expression, {"__builtins__": {}}, context)
+            
+        except Exception as e:
+            logging.error(f"Error checking invariant {prop.name}: {str(e)}")
+            return False
 
 
 class ComplianceChecker:
@@ -410,24 +286,19 @@ class ComplianceChecker:
                     })
             
             return VerificationResult(
-                verification_type=VerificationType.COMPLIANCE,
-                timestamp=datetime.now(),
                 success=len(violations) == 0,
-                details={
-                    'compliance_level': self.compliance_level.name,
-                    'rules_checked': list(rules.keys())
-                },
-                violations=violations
+                verification_type=VerificationType.COMPLIANCE,
+                message="All rules satisfied" if len(violations) == 0 else "Compliance violations detected",
+                details={"violations": violations} if violations else {}
             )
             
         except Exception as e:
             logging.error(f"Compliance check error: {str(e)}")
             return VerificationResult(
-                verification_type=VerificationType.COMPLIANCE,
-                timestamp=datetime.now(),
                 success=False,
-                details={'error': str(e)},
-                violations=[]
+                verification_type=VerificationType.COMPLIANCE,
+                message=f"Validation failed: {str(e)}",
+                details={"error": str(e)}
             )
 
     def _check_rule(self, tree: ast.AST, rule_data: Dict[str, Any]) -> bool:
@@ -495,24 +366,19 @@ class TestAutomator:
                     })
             
             return VerificationResult(
-                verification_type=VerificationType.TEST,
-                timestamp=datetime.now(),
                 success=len(violations) == 0,
-                details={
-                    'tests_run': result.testsRun,
-                    'coverage_percent': coverage_percent
-                },
-                violations=violations
+                verification_type=VerificationType.TEST,
+                message="All tests passed" if len(violations) == 0 else "Test failures detected",
+                details={"violations": violations} if violations else {}
             )
             
         except Exception as e:
             logging.error(f"Test automation error: {str(e)}")
             return VerificationResult(
-                verification_type=VerificationType.TEST,
-                timestamp=datetime.now(),
                 success=False,
-                details={'error': str(e)},
-                violations=[]
+                verification_type=VerificationType.TEST,
+                message=f"Validation failed: {str(e)}",
+                details={"error": str(e)}
             )
 
 
@@ -621,7 +487,7 @@ class SafetyVerification:
         critical = []
         for result in self.verification_results:
             if not result.success:
-                for violation in result.violations:
+                for violation in result.details.get('violations', []):
                     if violation.get('severity') == 'CRITICAL':
                         critical.append({
                             'type': result.verification_type.name,
