@@ -11,13 +11,15 @@ from src.analyzers.static import (
     StyleAnalyzer,
     DependencyAnalyzer,
     AnalysisType,
-    Severity
+    Severity,
+    StaticAnalysisEngine
 )
 
 
 class TestStaticAnalysis(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
+        self.engine = StaticAnalysisEngine()
 
     def tearDown(self):
         import shutil
@@ -66,7 +68,6 @@ class TestStaticAnalysis(unittest.TestCase):
             any(r.analysis_type == AnalysisType.STYLE_CHECK for r in results)
         )
 
-    @unittest.skip("Temporarily disabled - Dependency analysis needs fixing")
     def test_dependency_analysis(self):
         requirements = """
         requests==2.20.0
@@ -86,7 +87,6 @@ class TestStaticAnalysis(unittest.TestCase):
             any(r.analysis_type == AnalysisType.DEP_CHECK for r in results)
         )
 
-    @unittest.skip("Temporarily disabled - Full project analysis needs fixing")
     def test_full_project_analysis(self):
         # Create a small project structure
         project_dir = Path(self.temp_dir) / "test_project"
@@ -118,7 +118,6 @@ class TestStaticAnalysis(unittest.TestCase):
         self.assertIn('CRITICAL', summary['by_severity'])
         self.assertIn('PATTERN_MATCH', summary['by_type'])
 
-    @unittest.skip("Temporarily disabled - Critical issues filtering needs fixing")
     def test_critical_issues_filtering(self):
         code = """
         password = "super_secret"
