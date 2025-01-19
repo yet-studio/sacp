@@ -1,0 +1,1 @@
+tree -I 'node_modules|venv|.git|__pycache__|.coverage' --dirsfirst > tree.txt
