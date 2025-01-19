@@ -39,3 +39,11 @@ env/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Temporary output files
+.coverage
+git_diff.txt
+gitlog_*.txt
+piplist.txt
+pytest_output*.txt
+test-dependency-analyzer_output.txt

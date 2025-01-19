@@ -4,6 +4,7 @@ Tests for SafeAI CodeGuard Protocol safety constraints.
 
 import pytest
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
@@ -161,23 +162,34 @@ async def test_validator(validator):
     context = {
         'operation': {
             'type': 'read',
-            'file_path': '/safe/file.txt',
             'content': 'safe code',
             'file_size': 1000
         },
+        'file': 'test_file.txt',
         'user': {
             'permissions': {'basic'}
         },
         'modified_files': []
     }
-    result = await validator.validate(context)
-    assert result.valid
-    
-    # Invalid operation
+
+    # Test valid operation
+    result = validator.validate(context)
+    assert result.valid, f"Expected valid result but got: {result.message}"
+
+    # Test invalid operation (restricted pattern)
     context['operation']['content'] = 'eval("unsafe")'
-    result = await validator.validate(context)
-    assert not result.valid
-    assert len(result.errors) > 0
+    result = validator.validate(context)
+    assert not result.valid, "Expected invalid result for unsafe content"
+
+    # Test invalid path
+    context['file'] = '/etc/passwd'
+    result = validator.validate(context)
+    assert not result.valid, "Expected invalid result for restricted path"
+
+    # Test invalid extension
+    context['file'] = 'test.exe'
+    result = validator.validate(context)
+    assert not result.valid, "Expected invalid result for invalid extension"
 
 
 @pytest.mark.asyncio

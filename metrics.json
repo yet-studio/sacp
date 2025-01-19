@@ -1,5 +1,5 @@
 {
-  "timestamp": 1735469919.820346,
+  "timestamp": 1736288123.4260962,
   "tests": {
     "protocol": true,
     "safety_validator": true
@@ -9,11 +9,11 @@
     "failed": 0,
     "performance": {
       "protocol": {
-        "time": 0.2784702777862549,
-        "memory": 37179392
+        "time": 0.09127378463745117,
+        "memory": 11464704
       },
       "safety_validator": {
-        "time": 0.0001220703125,
+        "time": 0.00016307830810546875,
         "memory": 0
       }
     }

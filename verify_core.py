@@ -14,7 +14,7 @@ import importlib
 import sys
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class CoreVerifier:
@@ -51,7 +51,7 @@ class CoreVerifier:
             assert len(history) == 1
             assert history[0]["validated"] == True
             
-            logger.info("Protocol verification passed")
+            logger.debug("Protocol verification passed")
             return True
             
         except Exception as e:
@@ -69,7 +69,7 @@ class CoreVerifier:
             result = validator.validate(context)
             assert result.valid
             
-            logger.info("Safety validator verification passed")
+            logger.debug("Safety validator verification passed")
             return True
             
         except Exception as e:
@@ -118,7 +118,7 @@ def main():
         logger.error("Core verification failed")
         sys.exit(1)
     
-    logger.info("Core verification completed successfully")
+    logger.debug("Core verification completed successfully")
 
 if __name__ == "__main__":
     main()
