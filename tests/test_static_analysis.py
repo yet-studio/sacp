@@ -21,7 +21,10 @@ class TestStaticAnalysis(unittest.TestCase):
         """Set up test environment"""
         import tempfile
         import os
+        # Create and change to temp directory
         self.temp_dir = tempfile.mkdtemp()
+        self.old_cwd = os.getcwd()
+        os.chdir(self.temp_dir)
         # Ensure the directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
         self.engine = StaticAnalysisEngine()
@@ -30,6 +33,9 @@ class TestStaticAnalysis(unittest.TestCase):
         """Clean up test environment"""
         import shutil
         import os
+        # Change back to original directory
+        os.chdir(self.old_cwd)
+        # Clean up temp directory
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
