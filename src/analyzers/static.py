@@ -195,48 +195,39 @@ class StyleAnalyzer:
         results = []
         
         try:
-            # Create a temporary file to store pylint output
-            import tempfile
-            import json
-            import os
+            # Capture pylint output using StringIO
             import sys
             from io import StringIO
             
             # Capture stdout to prevent pylint from printing to console
+            output_buffer = StringIO()
             old_stdout = sys.stdout
-            sys.stdout = StringIO()
+            sys.stdout = output_buffer
             
             try:
-                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
-                    # Run pylint with JSON reporter and redirect output to temp file
-                    Run([file_path, '--output-format=json'], reporter=JSONReporter(), exit=False)
-                    
-                    # Get the output from the StringIO
-                    output = sys.stdout.getvalue()
-                    
-                    # Write the output to our temp file
-                    tmp.write(output)
-                    tmp.flush()
-                    
-                    # Read and parse the JSON output
-                    with open(tmp.name, 'r') as f:
-                        try:
-                            messages = json.load(f)
-                            for message in messages:
-                                results.append(AnalysisResult(
-                                    analysis_type=AnalysisType.STYLE_CHECK,
-                                    severity=self._convert_severity(message['type']),
-                                    file_path=file_path,
-                                    line_number=message['line'],
-                                    message=message['message'],
-                                    code=message['message-id'],
-                                    metadata={'symbol': message['symbol']}
-                                ))
-                        except json.JSONDecodeError:
-                            logging.error(f"Error parsing pylint output for {file_path}")
-                    
-                # Clean up temp file
-                os.unlink(tmp.name)
+                # Run pylint with JSON reporter
+                Run([str(file_path), '--output-format=json'], reporter=JSONReporter(), exit=False)
+                
+                # Get the output from StringIO
+                output = output_buffer.getvalue()
+                
+                try:
+                    # Parse JSON output directly from the string
+                    import json
+                    messages = json.loads(output)
+                    for message in messages:
+                        results.append(AnalysisResult(
+                            analysis_type=AnalysisType.STYLE_CHECK,
+                            severity=self._convert_severity(message['type']),
+                            file_path=file_path,
+                            line_number=message['line'],
+                            message=message['message'],
+                            code=message['message-id'],
+                            metadata={'symbol': message['symbol']}
+                        ))
+                except json.JSONDecodeError as je:
+                    logging.error(f"Error parsing pylint output for {file_path}: {je}")
+                
             finally:
                 # Restore stdout
                 sys.stdout = old_stdout
