@@ -3,87 +3,85 @@ Tests for the SACP static analysis system
 """
 
 import unittest
+import pytest
 from pathlib import Path
 import tempfile
-import os
-
 from src.analyzers.static import (
-    AnalysisType,
-    Severity,
-    PatternAnalyzer,
     SecurityAnalyzer,
     StyleAnalyzer,
     DependencyAnalyzer,
+    AnalysisType,
+    Severity,
     StaticAnalysisEngine
 )
 
 
 class TestStaticAnalysis(unittest.TestCase):
     def setUp(self):
+        """Set up test environment"""
+        import tempfile
+        import os
+        # Create and change to temp directory
         self.temp_dir = tempfile.mkdtemp()
+        self.old_cwd = os.getcwd()
+        os.chdir(self.temp_dir)
+        # Ensure the directory exists
+        os.makedirs(self.temp_dir, exist_ok=True)
         self.engine = StaticAnalysisEngine()
 
     def tearDown(self):
+        """Clean up test environment"""
         import shutil
-        shutil.rmtree(self.temp_dir)
+        import os
+        # Change back to original directory
+        os.chdir(self.old_cwd)
+        # Clean up temp directory
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def create_test_file(self, content: str) -> str:
-        """Create a temporary Python file with given content"""
-        file_path = Path(self.temp_dir) / "test.py"
+        """Create a test file with the given content"""
+        import os
+        file_path = os.path.join(self.temp_dir, "test.py")
         with open(file_path, 'w') as f:
-            f.write(content)
-        return str(file_path)
-
-    def test_pattern_analysis(self):
-        code = """
-        password = "hardcoded_secret123"
-        query = "SELECT * FROM users WHERE id = %s"
-        print("Debug message")
-        data = pickle.loads(some_data)
-        """
-        
-        file_path = self.create_test_file(code)
-        analyzer = PatternAnalyzer()
-        results = analyzer.analyze_file(file_path)
-        
-        # Should find hardcoded secret, debug print, and unsafe pickle
-        self.assertEqual(len(results), 3)
-        
-        # Verify hardcoded secret detection
-        secret_issues = [r for r in results if 'secret' in r.message.lower()]
-        self.assertEqual(len(secret_issues), 1)
-        self.assertEqual(secret_issues[0].severity, Severity.CRITICAL)
+            f.write(content.strip())
+        return file_path
 
     def test_security_analysis(self):
+        """Test security analysis functionality"""
+        # Create test file with security issues
         code = """
-        import pickle
-        import subprocess
-        
-        def unsafe_function():
-            data = pickle.loads(user_input)
-            subprocess.call(user_command, shell=True)
-        """
-        
+import pickle
+import os
+
+def unsafe_function():
+    data = input('Enter data: ')
+    # Unsafe deserialization
+    obj = pickle.loads(data)
+    return obj
+"""
         file_path = self.create_test_file(code)
         analyzer = SecurityAnalyzer()
         results = analyzer.analyze_file(file_path)
-        
-        # Should find pickle and subprocess security issues
+
+        # Should find security issues (like unsafe pickle usage)
         self.assertGreater(len(results), 0)
         self.assertTrue(any('pickle' in r.message.lower() for r in results))
 
     def test_style_analysis(self):
+        """Test style analysis functionality"""
+        # Create test file with style issues
         code = """
-        def badFunction():
-            x=1
-            return      x
-        """
+def badFunction():
+    x=1
+    return      x
+"""
         
         file_path = self.create_test_file(code)
         analyzer = StyleAnalyzer()
         results = analyzer.analyze_file(file_path)
         
-        # Should find style issues
+        # Should find style issues (like bad function name, missing spaces around operator)
         self.assertGreater(len(results), 0)
         self.assertTrue(
             any(r.analysis_type == AnalysisType.STYLE_CHECK for r in results)

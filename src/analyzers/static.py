@@ -189,27 +189,73 @@ class SecurityAnalyzer:
 
 class StyleAnalyzer:
     """Analyzes code style using Pylint"""
-
+    
     def analyze_file(self, file_path: str) -> List[AnalysisResult]:
         """Analyze a file for style issues"""
+        import os
+        import sys
+        import json
+        import logging
+        from io import StringIO
+        from pylint.lint import Run
+        from pylint.reporters.json_reporter import JSONReporter
+
         results = []
         
         try:
-            reporter = JSONReporter()
-            Run([file_path], reporter=reporter, exit=False)
+            # Check if file exists and is readable
+            if not os.path.isfile(file_path):
+                logging.error(f"File not found: {file_path}")
+                return results
             
-            for message in reporter.messages:
-                results.append(AnalysisResult(
-                    analysis_type=AnalysisType.STYLE_CHECK,
-                    severity=self._convert_severity(message.category),
-                    file_path=file_path,
-                    line_number=message.line,
-                    message=message.msg,
-                    code=message.msg_id,
-                    metadata={'symbol': message.symbol}
-                ))
+            if not os.access(file_path, os.R_OK):
+                logging.error(f"File not readable: {file_path}")
+                return results
+            
+            # Capture stdout to prevent pylint from printing to console
+            output_buffer = StringIO()
+            old_stdout = sys.stdout
+            sys.stdout = output_buffer
+            
+            try:
+                # Run pylint with JSON reporter and specific options
+                Run([
+                    str(file_path),
+                    '--output-format=json',
+                    '--disable=all',  # Disable all checks first
+                    '--enable=C,R,W,E,F',  # Enable all categories
+                    '--msg-template={msg_id}:{line:3d},{column}: {obj}: {msg}'
+                ], reporter=JSONReporter(), exit=False)
+                
+                # Get the output from StringIO
+                output = output_buffer.getvalue()
+                
+                try:
+                    # Parse JSON output directly from the string
+                    if output.strip():
+                        messages = json.loads(output)
+                        for message in messages:
+                            results.append(AnalysisResult(
+                                analysis_type=AnalysisType.STYLE_CHECK,
+                                severity=self._convert_severity(message.get('type', 'warning')),
+                                file_path=file_path,
+                                line_number=message.get('line', 0),
+                                message=message.get('message', ''),
+                                code=message.get('message-id', ''),
+                                metadata={'symbol': message.get('symbol', '')}
+                            ))
+                except json.JSONDecodeError as je:
+                    logging.error(f"Error parsing pylint output for {file_path}: {je}")
+                    logging.debug(f"Raw output: {output}")
+                
+            finally:
+                # Restore stdout
+                sys.stdout = old_stdout
+                
         except Exception as e:
             logging.error(f"Error style checking {file_path}: {str(e)}")
+            import traceback
+            logging.debug(f"Traceback: {traceback.format_exc()}")
         
         return results
 
@@ -222,7 +268,7 @@ class StyleAnalyzer:
             'error': Severity.ERROR,
             'fatal': Severity.CRITICAL
         }
-        return mapping.get(pylint_category, Severity.WARNING)
+        return mapping.get(pylint_category.lower(), Severity.WARNING)
 
 
 class DependencyAnalyzer:
@@ -232,46 +278,44 @@ class DependencyAnalyzer:
         """Analyze requirements.txt for known vulnerabilities"""
         results = []
         try:
+            # Read and parse requirements file
             with open(requirements_file, 'r') as f:
-                requirements = f.read().splitlines()
+                requirements = [line.strip() for line in f.readlines() 
+                              if line.strip() and not line.startswith('#')]
             
-            # Parse requirements into packages
-            packages = []
-            for req in requirements:
-                req = req.strip()
-                if req and not req.startswith('#'):
-                    if '==' in req:
-                        name, version = req.split('==')
-                        packages.append((name.strip(), version.strip()))
+            # Use safety to check for vulnerabilities
+            from safety.safety import safety
+            checked = safety.check(requirements)
             
-            # Check each package using safety
-            from safety import safety
-            for name, version in packages:
-                try:
-                    package_str = f"{name}=={version}"
-                    vulns = safety.check([package_str])
-                    
-                    if vulns:
-                        for vuln in vulns:
-                            severity = self._convert_severity(vuln.get('severity', 'unknown'))
-                            results.append(AnalysisResult(
-                                analysis_type=AnalysisType.DEP_CHECK,
-                                severity=severity,
-                                file_path=requirements_file,
-                                line_number=0,  # Requirements file
-                                message=f"Vulnerability in {name}=={version}: {vuln.get('advisory', 'Unknown vulnerability')}",
-                                metadata={
-                                    'package': name,
-                                    'version': version,
-                                    'vuln_id': vuln.get('id', 'unknown')
-                                }
-                            ))
-                except Exception as e:
-                    logging.error(f"Error checking {name}: {str(e)}")
-                    
+            # Process the results
+            for vuln in checked:
+                if isinstance(vuln, tuple) and len(vuln) >= 5:
+                    name, version, spec, reason, vuln_id = vuln[:5]
+                    severity = self._convert_severity('high')  # Safety doesn't provide severity
+                    results.append(AnalysisResult(
+                        analysis_type=AnalysisType.DEP_CHECK,
+                        severity=severity,
+                        file_path=requirements_file,
+                        line_number=0,  # Requirements file
+                        message=f"Vulnerability in {name}=={version}: {reason}",
+                        metadata={
+                            'package': name,
+                            'version': version,
+                            'vuln_id': vuln_id,
+                            'spec': spec,
+                            'reason': reason
+                        }
+                    ))
         except Exception as e:
-            logging.error(f"Error checking dependencies in {requirements_file}: {str(e)}")
-            
+            logging.error(f"Error analyzing requirements: {str(e)}")
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.DEP_CHECK,
+                severity=Severity.ERROR,
+                file_path=requirements_file,
+                line_number=0,
+                message=f"Error analyzing dependencies: {str(e)}",
+                metadata={'error': str(e)}
+            ))
         return results
 
     def _convert_severity(self, safety_severity: str) -> Severity:
@@ -280,8 +324,7 @@ class DependencyAnalyzer:
             'low': Severity.INFO,
             'medium': Severity.WARNING,
             'high': Severity.ERROR,
-            'critical': Severity.CRITICAL,
-            'unknown': Severity.WARNING  # Default to WARNING for unknown severity
+            'critical': Severity.CRITICAL
         }
         return severity_map.get(safety_severity.lower(), Severity.WARNING)
 
