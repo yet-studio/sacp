@@ -19,6 +19,7 @@ import coverage
 import z3
 from mypy import api as mypy_api
 from ..core.protocol import ComplianceLevel
+import io
 
 
 class VerificationType(Enum):
@@ -337,18 +338,8 @@ class TestAutomator:
             
             # Stop coverage measurement
             self.coverage.stop()
-            self.coverage.save()
             
             # Analyze results
-            coverage_data = self.coverage.analysis2()
-            coverage_percent = coverage_data[3]
-            
-            if coverage_percent < coverage_threshold:
-                violations.append({
-                    'type': 'coverage',
-                    'message': f'Coverage {coverage_percent}% below threshold {coverage_threshold}%'
-                })
-            
             if result.failures:
                 for failure in result.failures:
                     violations.append({
@@ -365,6 +356,21 @@ class TestAutomator:
                         'details': error[1]
                     })
             
+            try:
+                self.coverage.save()
+                coverage_percent = self.coverage.report(file=io.StringIO())
+                
+                if coverage_percent < coverage_threshold:
+                    violations.append({
+                        'type': 'coverage',
+                        'message': f'Coverage {coverage_percent:.1f}% below threshold {coverage_threshold}%'
+                    })
+            except Exception as e:
+                violations.append({
+                    'type': 'coverage_error',
+                    'message': f'Failed to analyze coverage: {str(e)}'
+                })
+            
             return VerificationResult(
                 success=len(violations) == 0,
                 verification_type=VerificationType.TEST,
@@ -377,7 +383,7 @@ class TestAutomator:
             return VerificationResult(
                 success=False,
                 verification_type=VerificationType.TEST,
-                message=f"Validation failed: {str(e)}",
+                message=f"Test automation failed: {str(e)}",
                 details={"error": str(e)}
             )
 
