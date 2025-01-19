@@ -195,6 +195,16 @@ class StyleAnalyzer:
         results = []
         
         try:
+            # Check if file exists and is readable
+            import os
+            if not os.path.isfile(file_path):
+                logging.error(f"File not found: {file_path}")
+                return results
+            
+            if not os.access(file_path, os.R_OK):
+                logging.error(f"File not readable: {file_path}")
+                return results
+            
             # Capture pylint output using StringIO
             import sys
             from io import StringIO

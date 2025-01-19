@@ -26,10 +26,12 @@ class TestStaticAnalysis(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def create_test_file(self, content: str) -> str:
-        file_path = Path(self.temp_dir) / "test.py"
+        """Create a test file with the given content"""
+        import os
+        file_path = os.path.join(self.temp_dir, "test.py")
         with open(file_path, 'w') as f:
             f.write(content)
-        return str(file_path)
+        return file_path
 
     @unittest.skip("Temporarily disabled - Security analysis needs fixing")
     def test_security_analysis(self):
@@ -50,7 +52,6 @@ class TestStaticAnalysis(unittest.TestCase):
         self.assertGreater(len(results), 0)
         self.assertTrue(any('pickle' in r.message.lower() for r in results))
 
-    @unittest.skip("Temporarily disabled - Style analysis needs fixing")
     def test_style_analysis(self):
         # Create test file with style issues
         code = """
