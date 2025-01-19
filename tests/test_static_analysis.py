@@ -50,7 +50,6 @@ class TestStaticAnalysis(unittest.TestCase):
         self.assertGreater(len(results), 0)
         self.assertTrue(any('pickle' in r.message.lower() for r in results))
 
-    @unittest.skip("Temporarily disabled - Style analysis needs fixing")
     def test_style_analysis(self):
         code = """
         def badFunction():
