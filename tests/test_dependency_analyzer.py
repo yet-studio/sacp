@@ -10,7 +10,6 @@ class TestDependencyAnalyzer(unittest.TestCase):
         with open(self.requirements_file, 'w') as f:
             f.write('requests==2.20.0\nDjango==1.11.0')  # Known vulnerable versions
 
-    @unittest.skip("Temporarily disabled - Dependency analysis needs fixing")
     def test_analyze_requirements(self):
         results = self.analyzer.analyze_requirements(self.requirements_file)
         self.assertGreater(len(results), 0, "Expected vulnerabilities not found.")

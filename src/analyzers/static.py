@@ -232,46 +232,44 @@ class DependencyAnalyzer:
         """Analyze requirements.txt for known vulnerabilities"""
         results = []
         try:
+            # Read and parse requirements file
             with open(requirements_file, 'r') as f:
-                requirements = f.read().splitlines()
+                requirements = [line.strip() for line in f.readlines() 
+                              if line.strip() and not line.startswith('#')]
             
-            # Parse requirements into packages
-            packages = []
-            for req in requirements:
-                req = req.strip()
-                if req and not req.startswith('#'):
-                    if '==' in req:
-                        name, version = req.split('==')
-                        packages.append((name.strip(), version.strip()))
+            # Use safety to check for vulnerabilities
+            from safety.safety import safety
+            checked = safety.check(requirements)
             
-            # Check each package using safety
-            from safety import safety
-            for name, version in packages:
-                try:
-                    package_str = f"{name}=={version}"
-                    vulns = safety.check([package_str])
-                    
-                    if vulns:
-                        for vuln in vulns:
-                            severity = self._convert_severity(vuln.get('severity', 'unknown'))
-                            results.append(AnalysisResult(
-                                analysis_type=AnalysisType.DEP_CHECK,
-                                severity=severity,
-                                file_path=requirements_file,
-                                line_number=0,  # Requirements file
-                                message=f"Vulnerability in {name}=={version}: {vuln.get('advisory', 'Unknown vulnerability')}",
-                                metadata={
-                                    'package': name,
-                                    'version': version,
-                                    'vuln_id': vuln.get('id', 'unknown')
-                                }
-                            ))
-                except Exception as e:
-                    logging.error(f"Error checking {name}: {str(e)}")
-                    
+            # Process the results
+            for vuln in checked:
+                if isinstance(vuln, tuple) and len(vuln) >= 5:
+                    name, version, spec, reason, vuln_id = vuln[:5]
+                    severity = self._convert_severity('high')  # Safety doesn't provide severity
+                    results.append(AnalysisResult(
+                        analysis_type=AnalysisType.DEP_CHECK,
+                        severity=severity,
+                        file_path=requirements_file,
+                        line_number=0,  # Requirements file
+                        message=f"Vulnerability in {name}=={version}: {reason}",
+                        metadata={
+                            'package': name,
+                            'version': version,
+                            'vuln_id': vuln_id,
+                            'spec': spec,
+                            'reason': reason
+                        }
+                    ))
         except Exception as e:
-            logging.error(f"Error checking dependencies in {requirements_file}: {str(e)}")
-            
+            logging.error(f"Error analyzing requirements: {str(e)}")
+            results.append(AnalysisResult(
+                analysis_type=AnalysisType.DEP_CHECK,
+                severity=Severity.ERROR,
+                file_path=requirements_file,
+                line_number=0,
+                message=f"Error analyzing dependencies: {str(e)}",
+                metadata={'error': str(e)}
+            ))
         return results
 
     def _convert_severity(self, safety_severity: str) -> Severity:
@@ -280,8 +278,7 @@ class DependencyAnalyzer:
             'low': Severity.INFO,
             'medium': Severity.WARNING,
             'high': Severity.ERROR,
-            'critical': Severity.CRITICAL,
-            'unknown': Severity.WARNING  # Default to WARNING for unknown severity
+            'critical': Severity.CRITICAL
         }
         return severity_map.get(safety_severity.lower(), Severity.WARNING)
 
